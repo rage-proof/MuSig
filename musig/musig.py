@@ -1,9 +1,24 @@
+"""MuSig Implemenation for Python
+
+This is an implemation of the MuSig Proposl for interactive multisignatures.
+Paper: https://eprint.iacr.org/2018/068
+
+Reference C implementation:
+https://github.com/ElementsProject/secp256k1-zkp/tree/secp256k1-zkp/src/modules/musig
+
+Javascript implementation:
+https://github.com/guggero/bip-schnorr
+
+"""
+
+from .schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
+from .utils import *
+
 MUSIG_TAG = hash_sha256(b'MuSig coefficient')
 
-
-def secp256k1_musig_compute_ell(pubkeys: list)-> bytes:
+def musig_compute_ell(pubkeys: list)-> bytes:
     """Computes ell = SHA256(pk[0], ..., pk[np-1])"""
-    pubkeys.sort(key = int_from_bytes) #wo anders muss das hin
+    #pubkeys.sort(key = int_from_bytes) #wo anders muss das hin
     p = b''
     for pubkey in pubkeys:
         if len(pubkey) != 32:
@@ -12,33 +27,33 @@ def secp256k1_musig_compute_ell(pubkeys: list)-> bytes:
     return hash_sha256(p)
 
 
-def secp256k1_musig_coefficient(ell, idx):
+def musig_coefficient(ell, idx):
     """Compute r = SHA256(ell, idx). The four bytes of idx are serialized least significant byte first. """
-    h = hash_sha256(MUSIG_TAG + MUSIG_TAG + ell + bytes_from_int(idx))
-    return int_from_bytes(h) % curve.n
+    h = hash_sha256(MUSIG_TAG + MUSIG_TAG + ell + idx.to_bytes(4, byteorder="little"))
+    return int_from_bytes(h) % curve.n # checken
 
 
-def secp256k1_musig_pubkey_combine(pubkeys, pubkey_hash = None):
+def musig_pubkey_combine(pubkeys, pubkey_hash = None):
     """Compute X = (r[0]*X[0]) + (r[1]*X[1]) + ..., + (r[n]*X[n])"""
     P = None
-    ell = pubkey_hash or secp256k1_musig_compute_ell(pubkeys)
+    ell = pubkey_hash or musig_compute_ell(pubkeys)
     for i in range(len(pubkeys)):
         P_i = point_from_bytes(pubkeys[i])
-        coefficient = secp256k1_musig_coefficient(ell,i)
+        coefficient = musig_coefficient(ell,i)
         summand = point_mul(P_i,coefficient)
         P = point_add(P,summand)
     return bytes_from_point(P)
         
 
-def secp256k1_musig_signers_init(n_signers):
-    signers = []
-    for i in range(n_signers):
-        signers.append({'index':i,'present':0})      
-    return signers
-    
+class MuSigSession:
 
-class MuSig:
-    
+    @staticmethod
+    def musig_signers_init(n_signers):
+        """Initialize the parties in the MuSig session and set their index number."""
+        signers = []
+        for i in range(n_signers):
+            signers.append({'index':i,'present':0})      
+        return signers
     
     def __init__(self, session_id32, n_signers, my_index, seckey, combined_pk, pk_hash32, msg32 = None):
 
@@ -47,7 +62,7 @@ class MuSig:
         if my_index > n_signers:
              raise ValueError('my_index is bigger that the number of all participants.')
         if n_signers >= 2**32:
-             raise ValueError('Amount of signers is too big.')
+             raise ValueError('Amount of signers is too large.')
         
         if (msg32 is not None):
             self.msg_is_set = 1
@@ -61,32 +76,33 @@ class MuSig:
         self.nonce_is_set = 0
         self.has_secret_data = 1
         self.n_signers = n_signers
-        self.signers = secp256k1_musig_signers_init(self.n_signers)
+        self.signers = MuSigSession.musig_signers_init(self.n_signers)
         self.nonce_commitments_hash_is_set = 0
         self.nonce_commitments_hash = None
         
-        # compute secret key
-        coefficient = secp256k1_musig_coefficient(pk_hash32, my_index)
-        self.seckey = (coefficient * seckey) % curve.n
+        # 1 compute secret key
+        coefficient = musig_coefficient(pk_hash32, my_index)
+        self.seckey = (coefficient * int_from_bytes(seckey)) % curve.n
         
-        # compute secret nonce
+        # 2 compute secret nonce
+        # DONT us a deterministic nonce! 
         self.secnonce = int_from_bytes(\
-                        hash_sha256(session_id32 + (self.msg if (self.msg is not None) else b'') + combined_pk + bytes_from_int(seckey))\
+                        hash_sha256(session_id32 + (self.msg if (self.msg is not None) else b'') + combined_pk + seckey)\
                                       ) % curve.n # original kein mod
    
-        # Compute public nonce and commitment
-    
+        # 3 Compute public nonce and commitment
         R = point_mul(curve.G, self.secnonce) #
-        self.secnonce = curve.n - self.secnonce if (jacobi(R[1]) != 1) else self.secnonce #
-        
+        self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce #        
         self.nonce = bytes_from_point(R)
         self.nonce_commitment = hash_sha256(self.nonce)
+        
+        
 
         
     def get_public_nonce(self, commitments):
         
         if (len(commitments) != self.n_signers or self.has_secret_data == 0):
-            raise ValueError('The commitments are wrong.')
+            raise ValueError('The commitments are wrong.') #formulierung
         
         for i in range(len(commitments)):
              if len(commitments[i]) != 32:
@@ -164,84 +180,27 @@ class MuSig:
             return False
         
         e = int_from_bytes(hash_sha256(self.combined_nonce + self.combined_pk + self.msg))
-        
         for i in range(self.n_signers):
-            
             if (self.signers[i]['present'] != 1):
                 return False  #throw error
             
-            coefficient = secp256k1_musig_coefficient(self.pk_hash, self.signers[i]['index'])
+            coefficient = musig_coefficient(self.pk_hash, self.signers[i]['index'])
             Ri = point_from_bytes(self.signers[i]['nonce'])
             Si = point_mul(curve.G, sigs[i])
-            Pi = point_from_bytes(pubkeys[i])
-            
-            RP = point_add(Si, point_mul(Pi, curve.n - ((e * coefficient) % curve.n)))
-            
-            sig = point_add(point_mul(Pi, (e * coefficient) % curve.n), Ri)
-            
-            print('right ', sig)
-            print('left ', Si)
-            
+            Pi = point_from_bytes(pubkeys[i])          
+            R  = point_add(Si, point_mul(Pi, curve.n - ((e * coefficient) % curve.n)))
+           
+            if R is None or not has_square_y(R) or R[0] != Ri[0]:
+                return False
+        return True
     
-
-
-def main3():
-    N_SIGNERS = 3
-    seckeys = []
-    pubkeys = []
-    msg32 = hash_sha256(b'Test')
-    for _ in range(N_SIGNERS):
-        seckey,pubkey = create_key_pair()
-        seckeys.append(seckey)
-        pubkeys.append(pubkey)
-
-    ell = secp256k1_musig_compute_ell(pubkeys)
-    combined_pk = secp256k1_musig_pubkey_combine(pubkeys,ell)
     
-    sessions = []
-    nonce_commitments = []
-    for i in range(N_SIGNERS):
-        session_id32 = os.urandom(32)
-        session = MuSig(session_id32, N_SIGNERS, i, seckeys[i], combined_pk, pk_hash32=ell, msg32=msg32)
-        sessions.append(session)
-        nonce_commitments.append(session.nonce_commitment)
+    def partial_sig_combine(self, sigs, pubkeys):
+        if not self.partial_sig_verify(sigs, pubkeys):
+            raise RunTimeError('At least one signatur is wrong.')          
+        s_sum = 0
+        for i in range(len(sigs)):
+            s_sum = (s_sum + sigs[i]) % curve.n
+        self.combined_sig = bytes_from_int(s_sum)
+        return self.combined_nonce, self.combined_sig
         
-    print(nonce_commitments) #communicate the commitments
-    
-    nonces = []
-    #1 Set nonce commitments in the signer data and get the own public nonce
-    for i in range(N_SIGNERS):
-        nonces.append(sessions[i].get_public_nonce(nonce_commitments))
-    
-    sig = []
-    #2 exchanges nonces
-    for i in range(N_SIGNERS):
-        if not sessions[i].set_nonce(nonces):
-            raise ValueError('Failed.')
-            
-        if not sessions[i].combine_nonces():
-            raise ValueError('Failed.')
-        print(sessions[i].combined_nonce)
-        sig.append(sessions[i].partial_sign())
-        print(sig[i])
-    
-    
-    #3 exchanges partial sigs
-    sessions[0].partial_sig_verify(sig, pubkeys)
-    #for i in range(N_SIGNERS):
-        #if not sessions[i].partial_sig_verify():
-        #    raise RuntimeError('one or more signature where not correct')
-        #sessions[i].partial_sig_verify(sig, pubkeys)
-    
-        
-    
-
-    
-
-
-    
-
-if __name__ == '__main__':
-    main3()
-    
-    

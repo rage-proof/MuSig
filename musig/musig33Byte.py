@@ -6,7 +6,6 @@ MUSIG_TAG = hash_sha256(b'MuSig coefficient')
 
 def musig_compute_ell(pubkeys: list)-> bytes:
     """Computes ell = SHA256(pk[0], ..., pk[np-1])"""
-    #pubkeys.sort(key = int_from_bytes) #wo anders muss das hin
     p = b''
     for pubkey in pubkeys:
         p += pubkey
@@ -118,12 +117,10 @@ class MuSigSession:
     def set_nonce(self, nonces):   
         if len(nonces) != self.n_signers:
             return False
-        
         if (self.nonce_commitments_hash_is_set == 0):
             return False
                 
         for i in range(len(nonces)):
-
             if self.signers[i]['nonce_commitment'] != hash_sha256(nonces[i]):
                 return False
             self.signers[i]['nonce'] = nonces[i]
@@ -132,12 +129,18 @@ class MuSigSession:
         
         
     def combine_nonces(self):
-        R = None
+        R0 = None
         for i in range(self.n_signers):
             if self.signers[i]['present'] != 1:
                 return False  
-            R = point_add(R,point_from_bytes(self.signers[i]['nonce']))
-               
+            R0 = point_add(R0,point_from_bytes(self.signers[i]['nonce']))
+
+        if not has_square_y(R0):
+            R = [x(R0), curve.p - y(R0)]
+            self.nonce_is_negated = True
+        else:
+            R = R0
+            self.nonce_is_negated = False
         self.combined_nonce = bytes_from_point(R)
         self.nonce_is_set = 1
         return True
@@ -151,8 +154,9 @@ class MuSigSession:
         if self.msg_is_set == 0:
             raise ValueError('The message is missing.')
             
-        e = int_from_bytes(hash_sha256(self.combined_nonce[1:33] + self.combined_pk + self.msg)) 
-        s = (self.secnonce + (e * self.seckey)) % curve.n
+        e = int_from_bytes(hash_sha256(self.combined_nonce[1:33] + self.combined_pk + self.msg))
+        k = curve.n - self.secnonce if self.nonce_is_negated else self.secnonce
+        s = (k + (e * self.seckey)) % curve.n
         return s
 
     
@@ -163,28 +167,30 @@ class MuSigSession:
         if (len(sigs) != self.n_signers) or (len(sigs) != len(pubkeys)):
             return False
         
-        e = int_from_bytes(hash_sha256(self.combined_nonce + self.combined_pk + self.msg))
+        e = int_from_bytes(hash_sha256(self.combined_nonce[1:33] + self.combined_pk + self.msg))
         for i in range(self.n_signers):
             if (self.signers[i]['present'] != 1):
                 return False  #throw error
-            
+
             coefficient = musig_coefficient(self.pk_hash, self.signers[i]['index'])
             Ri = point_from_bytes(self.signers[i]['nonce'])
+            
             Si = point_mul(curve.G, sigs[i])
             Pi = point_from_bytes(pubkeys[i])          
-            R  = point_add(Si, point_mul(Pi, curve.n - ((e * coefficient) % curve.n)))
-           
-            if R is None or not has_square_y(R) or R[0] != Ri[0]:
+            RP = point_add(Si, point_mul(Pi, curve.n - ((e * coefficient) % curve.n)))
+            RP = (x(RP), curve.p - y(RP)) if not self.nonce_is_negated else RP
+            SUM = point_add(RP, Ri)
+            if not is_infinity(SUM):
                 return False
         return True
     
     
     def partial_sig_combine(self, sigs, pubkeys):
-        #if not self.partial_sig_verify(sigs, pubkeys):
-        #    raise RunTimeError('At least one signatur is wrong.')          
+        if not self.partial_sig_verify(sigs, pubkeys):
+            raise RuntimeError('At least one signatur is wrong.')          
         s_sum = 0
         for i in range(len(sigs)):
             s_sum = (s_sum + sigs[i]) % curve.n
         self.combined_sig = bytes_from_int(s_sum)
-        return self.combined_nonce[1:33] + self.combined_sig #
+        return self.combined_nonce[1:33] + self.combined_sig 
         

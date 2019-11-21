@@ -85,14 +85,14 @@ class MuSigSession:
         self.seckey = (coefficient * int_from_bytes(seckey)) % curve.n
         
         # 2 compute secret nonce
-        # DONT us a deterministic nonce! 
+        # DONT use a deterministic nonce! 
         self.secnonce = int_from_bytes(\
                         hash_sha256(session_id32 + (self.msg if (self.msg is not None) else b'') + combined_pk + seckey)\
                                       ) % curve.n # original kein mod
    
         # 3 Compute public nonce and commitment
         R = point_mul(curve.G, self.secnonce) #
-        self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce #        
+        #self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce #        
         self.nonce = bytes_from_point(R)
         self.nonce_commitment = hash_sha256(self.nonce)
         
@@ -104,7 +104,7 @@ class MuSigSession:
         if (len(commitments) != self.n_signers or self.has_secret_data == 0):
             raise ValueError('The commitments are wrong.') #formulierung
         
-        for i in range(len(commitments)):
+        for i in range(self.n_signers):
              if len(commitments[i]) != 32:
                 raise ValueError('The commitment of R must be a 32-byte array.')
         
@@ -139,7 +139,7 @@ class MuSigSession:
                 
         for i in range(len(nonces)):
             if len(nonces[i]) != 32:
-                raise ValueError('The nonce (R) must be a 32-byte.')
+                raise ValueError('The nonce (R) must be a 32-byte array.')
             if self.signers[i]['nonce_commitment'] != hash_sha256(nonces[i]):
                 return False
             self.signers[i]['nonce'] = nonces[i]
@@ -148,12 +148,18 @@ class MuSigSession:
         
         
     def combine_nonces(self):
-        R = None
+        R0 = None
         for i in range(self.n_signers):
             if self.signers[i]['present'] != 1:
                 return False  
-            R = point_add(R,point_from_bytes(self.signers[i]['nonce']))
-               
+            R0 = point_add(R0,point_from_bytes(self.signers[i]['nonce']))
+
+        if not has_square_y(R0):
+            R = (x(R0), curve.p - y(R0))
+            self.nonce_is_negated = True
+        else:
+            R = R0
+            self.nonce_is_negated = False
         self.combined_nonce = bytes_from_point(R)
         self.nonce_is_set = 1
         return True
@@ -168,7 +174,8 @@ class MuSigSession:
             raise ValueError('The message is missing.')
             
         e = int_from_bytes(hash_sha256(self.combined_nonce + self.combined_pk + self.msg))
-        s = (self.secnonce + (e * self.seckey)) % curve.n
+        k = curve.n - self.secnonce if self.nonce_is_negated else self.secnonce
+        s = (k + (e * self.seckey)) % curve.n
         return s
 
     
@@ -202,5 +209,5 @@ class MuSigSession:
         for i in range(len(sigs)):
             s_sum = (s_sum + sigs[i]) % curve.n
         self.combined_sig = bytes_from_int(s_sum)
-        return self.combined_nonce, self.combined_sig
+        return self.combined_nonce + self.combined_sig
         

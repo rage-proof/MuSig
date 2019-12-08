@@ -42,8 +42,10 @@ def main():
                 passed = False
         if passed is True:
             print(' * Passed PubKey generation.')
-        actual_combined_pub_key = musig_pubkey_combine(pub_keys)
-        
+        else:
+            passed = True
+    
+        actual_combined_pub_key = musig_pubkey_combine(pub_keys)    
         if actual_combined_pub_key != pub_key_combined:
             print(' * Failed combining pub keys.')
         else:
@@ -74,27 +76,40 @@ def main():
         else:
             passed = True
             
-    
         actual_part_sigs = []
         for i in range(n_signers):
             if not musig_sessions[i].set_nonce(public_nonces):
-                print(' * Failed setting the public nonce. index:{} of test:{}'.format(i,tests))
+                print(' * Failed setting the public nonce. index:{}'.format(i))
+                passed = False
             if not musig_sessions[i].combine_nonces():
-                print(' * Failed creating a combined nonce. index:{} of test:{}'.format(i,tests))
+                print(' * Failed creating a combined nonce. index:{}'.format(i))
+                passed = False
             if musig_sessions[i].combined_nonce != nonce_combined:
                 print(' * Failed nonce combining. index:{}'.format(i))
+                passed = False
             actual_part_sigs.append(musig_sessions[i].partial_sign())
             if bytes_from_int(actual_part_sigs[i]) != partial_sigs[i]:
                 print(' * Failed partial signature. index:{}'.format(i))
-
+                passed = False
+                
+        if passed is True:
+            print(' * Passed nonce combining test.')
+        else:
+            passed = True
+            
         #every participant needs to receive all signature up front
         for i in range(n_signers):
             if musig_sessions[i].partial_sig_combine(actual_part_sigs,pub_keys) != signature:
-                print(' * Failed Creating Combined Signature. index:{} of test:{}'.format(i,tests))
+                print(' * Failed creating combined signature. index:{}'.format(i))
+                passed = False
+                
+        if passed is True:
+            print(' * Passed signature combining test.')
+        else:
+            passed = True
 
               
         tests += 1
-        print()  
 
 
 if __name__ == '__main__':

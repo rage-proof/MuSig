@@ -18,7 +18,7 @@ def schnorr_sign(msg, seckey0):
     e = int_from_bytes(tagged_hash("BIPSchnorr", bytes_from_point(R) + bytes_from_point(P) + msg)) % curve.n
     return bytes_from_int(R[0]) + bytes_from_int((k + e * seckey) % curve.n)
 
-def schnorr_verify(msg, pubkey, sig):
+def schnorr_verify(msg, pubkey, sig, tag = "BIPSchnorr"):
     if len(msg) != 32:
         raise ValueError('The message must be a 32-byte array.')
     if len(pubkey) != 32:
@@ -32,8 +32,10 @@ def schnorr_verify(msg, pubkey, sig):
     s = int_from_bytes(sig[32:64])
     if (r >= curve.p or s >= curve.n):
         return False
-    e = int_from_bytes(tagged_hash("BIPSchnorr", sig[0:32] + pubkey + msg)) % curve.n
+    e = int_from_bytes(tagged_hash(tag, sig[0:32] + pubkey + msg)) % curve.n
     R = point_add(point_mul(curve.G, s), point_mul(P, curve.n - e))
+    print(r)#
+    print(R)#
     if R is None or not has_square_y(R) or x(R) != r:
         return False
     return True

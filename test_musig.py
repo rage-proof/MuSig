@@ -20,7 +20,7 @@ def main():
 
     #ell = CombinedPubkey.musig_compute_ell(pubkeys)
     combined_pk = CombinedPubkey(pubkeys)
-
+    print(combined_pk)
     sessions = []
     nonce_commitments = []
     for i in range(N_SIGNERS):
@@ -28,7 +28,6 @@ def main():
         session = MuSigSession(session_id32, N_SIGNERS, i, seckeys[i], combined_pk.get_key(), combined_pk.get_pre_session(), msg32)
         sessions.append(session)
         nonce_commitments.append(session.nonce_commitment) #TODO: method für nonce create
-
         
     nonces = []
     #1 Set nonce commitments in the signer data and get the own public nonce
@@ -58,7 +57,8 @@ def main():
         print('   * Signature aggregation failed.')
     else:
         print('   * Signature aggregation successful.')
-    
+    """
+    # delete from here
     print()
     print(int_from_bytes(final_sigs[0][0:32]))
     print(point_from_bytes(sessions[0].combined_nonce))
@@ -76,7 +76,7 @@ def main():
     
 
     #print(schnorr_verify(msg32, combined_pk, final_sigs[1],""))
-    
+    """
 
    
         

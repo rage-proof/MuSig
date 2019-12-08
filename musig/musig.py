@@ -64,6 +64,10 @@ class CombinedPubkey:
     def get_pre_session(self):
         return self.__pre_session
 
+    def __str__(self):
+        return 'combined public key: {} \nis quadratic?: {}'.format(int_from_bytes(self.__combined_pk),
+                                                                    not self.__pre_session['is_negated'])
+
 
 class MuSigSession:
     """
@@ -96,7 +100,6 @@ class MuSigSession:
         self.msg = msg32          
         self.combined_pk = combined_pk
         self.pre_session = pre_session
-        #self.pk_hash = pre_session['pk_hash']
         self.nonce_is_set = 0
         self.has_secret_data = 1
         self.n_signers = n_signers
@@ -107,10 +110,7 @@ class MuSigSession:
         # 1 compute secret key
         coefficient = CombinedPubkey.musig_coefficient(self.pre_session['pk_hash'], my_index)
         X = point_mul(curve.G, int_from_bytes(seckey))
-        if ((not has_square_y(X) ) + (not pre_session['is_negated']) % 2 == 1):
-            seckey = curve.n - int_from_bytes(seckey)
-        else:
-            seckey = int_from_bytes(seckey)
+        seckey = curve.n - int_from_bytes(seckey) if not has_square_y(X) else int_from_bytes(seckey)
         self.seckey = (coefficient * seckey) % curve.n
         
         # 2 compute secret nonce
@@ -122,7 +122,6 @@ class MuSigSession:
         self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce        
         self.nonce = bytes_from_point(R)
         self.nonce_commitment = hash_sha256(self.nonce)
-        print(self.pre_session)
 
     def __signers_init(self, n_signers):
         """Initialize the parties in the MuSig session and set their index number."""
@@ -189,7 +188,6 @@ class MuSigSession:
             self.nonce_is_negated = False 
         self.combined_nonce = bytes_from_point(R0)
         self.nonce_is_set = 1
-        print(self.nonce_is_negated)
         return True
     
     

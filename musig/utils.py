@@ -95,7 +95,8 @@ def create_key_pair():
     if not (1 <= seckey0 <= curve.n - 1):
         raise ValueError('The secret key must be an integer in the range 1..n-1.')
     pubkey = point_mul(curve.G, seckey0)
-    seckey = curve.n - seckey0 if not  has_square_y(pubkey) else seckey0
+    #seckey = curve.n - seckey0 if not  has_square_y(pubkey) else seckey0
+    seckey = seckey0
     return bytes_from_int(seckey), bytes_from_point(pubkey)
 
 

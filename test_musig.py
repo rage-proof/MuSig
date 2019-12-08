@@ -1,8 +1,8 @@
 import os
 
 from musig import *
-from musig.utils import create_key_pair, hash_sha256
-
+from musig.utils import create_key_pair, hash_sha256, int_from_bytes, curve, point_add, point_mul,point_from_bytes #curve
+from musig.schnorr import schnorr_verify
 
 
 def main():
@@ -18,18 +18,18 @@ def main():
         seckeys.append(seckey)
         pubkeys.append(pubkey)
 
-    ell = musig_compute_ell(pubkeys)
-    combined_pk = musig_pubkey_combine(pubkeys,ell)
-    
+    #ell = CombinedPubkey.musig_compute_ell(pubkeys)
+    combined_pk = CombinedPubkey(pubkeys)
+
     sessions = []
     nonce_commitments = []
     for i in range(N_SIGNERS):
         session_id32 = os.urandom(32)
-        session = MuSigSession(session_id32, N_SIGNERS, i, seckeys[i], combined_pk, pk_hash32=ell, msg32=msg32)
+        session = MuSigSession(session_id32, N_SIGNERS, i, seckeys[i], combined_pk.get_key(), combined_pk.get_pre_session(), msg32)
         sessions.append(session)
         nonce_commitments.append(session.nonce_commitment) #TODO: method für nonce create
+
         
-    
     nonces = []
     #1 Set nonce commitments in the signer data and get the own public nonce
     for i in range(N_SIGNERS):
@@ -44,12 +44,13 @@ def main():
         if not sessions[i].combine_nonces():
             raise ValueError('Combining all nonces together failed.')
         sig.append(sessions[i].partial_sign())
-
-    final_sigs = [] # for testing the result of the final signature
+    
+    final_sigs = [] 
     #3 exchanges partial sigs and combine them to one
     for i in range(N_SIGNERS):
-        if not sessions[i].partial_sig_verify(sig, pubkeys):
-            raise RuntimeError('One or more signature were not correct.')
+        for j in range(N_SIGNERS):
+            if not sessions[i].partial_sig_verify(sig[j], pubkeys[j], j):
+                raise RuntimeError('Signature could not be verified. Index: ',j)
             
         final_sigs.append(sessions[i].partial_sig_combine(sig, pubkeys))
 
@@ -57,6 +58,27 @@ def main():
         print('   * Signature aggregation failed.')
     else:
         print('   * Signature aggregation successful.')
+    
+    print()
+    print(int_from_bytes(final_sigs[0][0:32]))
+    print(point_from_bytes(sessions[0].combined_nonce))
+    print()
+
+    Rx = int_from_bytes(final_sigs[0][0:32])
+    s = int_from_bytes(sessions[0].combined_sig)#geändert und 50% sind korrekt
+    P = point_from_bytes(combined_pk.get_key())
+    if (s >= curve.n):
+        raise
+    e = int_from_bytes(hash_sha256(final_sigs[0][0:32] + combined_pk.get_key() + msg32)) % curve.n
+    R = point_add(point_mul(curve.G, s), point_mul(P, curve.n - e))
+    print(Rx)
+    print(R)
+    
+
+    #print(schnorr_verify(msg32, combined_pk, final_sigs[1],""))
+    
+
+   
         
 
     

@@ -20,7 +20,6 @@ def main():
 
     #ell = CombinedPubkey.musig_compute_ell(pubkeys)
     combined_pk = CombinedPubkey(pubkeys)
-    print(combined_pk)
     sessions = []
     nonce_commitments = []
     for i in range(N_SIGNERS):
@@ -34,7 +33,7 @@ def main():
     for i in range(N_SIGNERS):
         nonces.append(sessions[i].get_public_nonce(nonce_commitments))
     
-    sig = []
+    sigs = []
     #2 Set public nonces for all participants, create a combined nonce and create the own partial signature
     for i in range(N_SIGNERS):
         if not sessions[i].set_nonce(nonces):
@@ -42,45 +41,25 @@ def main():
             
         if not sessions[i].combine_nonces():
             raise ValueError('Combining all nonces together failed.')
-        sig.append(sessions[i].partial_sign())
+        sigs.append(sessions[i].partial_sign())
     
     final_sigs = [] 
     #3 exchanges partial sigs and combine them to one
     for i in range(N_SIGNERS):
         for j in range(N_SIGNERS):
-            if not sessions[i].partial_sig_verify(sig[j], pubkeys[j], j):
+            if not sessions[i].partial_sig_verify(sigs[j], pubkeys[j], j):
                 raise RuntimeError('Signature could not be verified. Index: ',j)
             
-        final_sigs.append(sessions[i].partial_sig_combine(sig, pubkeys))
+        final_sigs.append(sessions[i].partial_sig_combine(sigs, pubkeys))
 
     if final_sigs[0] != final_sigs[1] or final_sigs[1] != final_sigs[2]:
         print('   * Signature aggregation failed.')
     else:
         print('   * Signature aggregation successful.')
-    """
-    # delete from here
-    print()
-    print(int_from_bytes(final_sigs[0][0:32]))
-    print(point_from_bytes(sessions[0].combined_nonce))
-    print()
+    #print(final_sigs[0],len(final_sigs[0]))
 
-    Rx = int_from_bytes(final_sigs[0][0:32])
-    s = int_from_bytes(sessions[0].combined_sig)#geändert und 50% sind korrekt
-    P = point_from_bytes(combined_pk.get_key())
-    if (s >= curve.n):
-        raise
-    e = int_from_bytes(hash_sha256(final_sigs[0][0:32] + combined_pk.get_key() + msg32)) % curve.n
-    R = point_add(point_mul(curve.G, s), point_mul(P, curve.n - e))
-    print(Rx)
-    print(R)
+    print(schnorr_verify(msg32,combined_pk.get_key(),final_sigs[0],tag=''))
     
-
-    #print(schnorr_verify(msg32, combined_pk, final_sigs[1],""))
-    """
-
-   
-        
-
     
 
 if __name__ == '__main__':

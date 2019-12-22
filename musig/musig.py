@@ -1,15 +1,3 @@
-"""
-MuSig Implemenation for Python
-
-This is an implemation of the muSig Proposl for schnorr multisignatures.
-Paper: https://eprint.iacr.org/2018/068
-
-Reference C implementation:
-https://github.com/ElementsProject/secp256k1-zkp/tree/secp256k1-zkp/src/modules/musig
-
-Javascript implementation:
-https://github.com/guggero/bip-schnorr
-""" #kommtin __init__.py
 
 from .schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
 from .utils import *
@@ -37,7 +25,7 @@ class CombinedPubkey:
             p += pubkey
         return hash_sha256(p)
 
-    def __init__(self, pubkeys, pk_hash= None, pre_session = None):
+    def __init__(self, pubkeys, pk_hash = None, pre_session = None):
         """Compute X = (r[0]*X[0]) + (r[1]*X[1]) + ..., + (r[n]*X[n])"""
         P = None
         ell = pk_hash or CombinedPubkey.musig_compute_ell(pubkeys)
@@ -50,7 +38,7 @@ class CombinedPubkey:
         self.__combined_pk = bytes_from_point(P)
         self.__pre_session = self.__create_pre_session(PRE_SESSION_MAGIC, ell , is_negated)
 
-    def __create_pre_session(self, pre_session_magic, pk_hash, is_negated, tweak_is_set = 0):
+    def __create_pre_session(self, pre_session_magic, pk_hash, is_negated, tweak_is_set = False):
         pre_session = dict()
         pre_session['pre_session_magic'] = pre_session_magic
         pre_session['pk_hash'] = pk_hash
@@ -110,7 +98,8 @@ class MuSigSession:
         # 1 compute secret key
         coefficient = CombinedPubkey.musig_coefficient(self.pre_session['pk_hash'], my_index)
         X = point_mul(curve.G, int_from_bytes(seckey))
-        seckey = curve.n - int_from_bytes(seckey) if not has_square_y(X) else int_from_bytes(seckey)
+        seckey = curve.n - int_from_bytes(seckey) if (not has_square_y(X)) ^ self.pre_session['is_negated'] \
+                 else int_from_bytes(seckey)
         self.seckey = (coefficient * seckey) % curve.n
         
         # 2 compute secret nonce
@@ -182,16 +171,13 @@ class MuSigSession:
                 return False  
             R0 = point_add(R0,point_from_bytes(self.signers[i]['nonce']))
 
-        if not has_square_y(R0):
-            self.nonce_is_negated = True
-        else:
-            self.nonce_is_negated = False 
+        self.nonce_is_negated = not has_square_y(R0)
         self.combined_nonce = bytes_from_point(R0)
         self.nonce_is_set = 1
         return True
     
     
-    def partial_sign(self):
+    def partial_sign(self, tag = ''):
         if self.nonce_is_set == 0:
             raise ValueError('The combined nonce is missing.')
         if self.has_secret_data == 0:
@@ -199,25 +185,27 @@ class MuSigSession:
         if self.msg_is_set == 0:
             raise ValueError('The message is missing.')
             
-        e = int_from_bytes(hash_sha256(self.combined_nonce + self.combined_pk + self.msg)) % curve.n
+        e = int_from_bytes(tagged_hash(tag, self.combined_nonce + self.combined_pk + self.msg)) % curve.n
         k = curve.n - self.secnonce if self.nonce_is_negated else self.secnonce
         s = (k + (e * self.seckey)) % curve.n
         return bytes_from_int(s)
 
     
-    def partial_sig_verify(self, sig, pubkey, i):
+    def partial_sig_verify(self, sig, pubkey, i, tag = ''):
         if self.nonce_is_set == 0:
             raise ValueError('The combined nonce is missing.')          
         if (self.signers[i]['present'] != 1):
             raise RuntimeError('Nonce is missing from party.')
         
-        e = int_from_bytes(hash_sha256(self.combined_nonce + self.combined_pk + self.msg)) % curve.n
         coefficient = CombinedPubkey.musig_coefficient(self.pre_session['pk_hash'], self.signers[i]['index'])
+        e = int_from_bytes(tagged_hash(tag, self.combined_nonce + self.combined_pk + self.msg)) % curve.n
+        e = curve.n - ((e * coefficient) % curve.n) if self.pre_session['is_negated'] else (e * coefficient) % curve.n
+        
         Ri = point_from_bytes(self.signers[i]['nonce'])    
         Si = point_mul(curve.G, int_from_bytes(sig))
         Pi = point_from_bytes(pubkey)
-        RP = point_add(Si, point_mul(Pi, curve.n - ((e * coefficient) % curve.n)))
-        # this is needed for the combined nonce only. it's the opposite action to signing
+        RP = point_add(Si, point_mul(Pi, curve.n - e))
+        # this is needed for the combined nonce only. it's the opposite action to signing.
         RP = (x(RP), curve.p - y(RP)) if not self.nonce_is_negated else RP
         SUM = point_add(RP, Ri)
         if not is_infinity(SUM):
@@ -226,9 +214,6 @@ class MuSigSession:
    
     
     def partial_sig_combine(self, sigs, pubkeys):
-        for i in range(len(sigs)):
-            if not self.partial_sig_verify(sigs[i], pubkeys[i], i):
-                raise RuntimeError('Signature could not be verified. Index: ',i)
         s_sum = 0
         for i in range(len(sigs)):
             s_sum = (s_sum + int_from_bytes(sigs[i])) % curve.n

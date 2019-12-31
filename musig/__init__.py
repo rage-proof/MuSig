@@ -1,7 +1,7 @@
 """
 MuSig Implemenation for Python
 
-This is an implemation of the muSig Proposl for schnorr multisignatures.
+This is an implementation of the muSig Proposal for schnorr multisignatures.
 Paper: https://eprint.iacr.org/2018/068
 
 Reference C implementation:

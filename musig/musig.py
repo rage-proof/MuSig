@@ -1,5 +1,5 @@
+#!/usr/bin/env python3
 
-from .schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
 from .utils import *
 
 MUSIG_TAG = hash_sha256(b'MuSig coefficient')
@@ -15,7 +15,7 @@ class CombinedPubkey:
         return int_from_bytes(h) % curve.n
 
     @staticmethod
-    def musig_compute_ell(pubkeys: list)-> bytes:
+    def musig_compute_ell(pubkeys: list) -> bytes:
         """Computes ell = SHA256(pk[0], ..., pk[np-1])"""
         #pubkeys.sort(key = int_from_bytes) #wo anders muss das hin
         p = b''
@@ -38,7 +38,7 @@ class CombinedPubkey:
         self.__combined_pk = bytes_from_point(P)
         self.__pre_session = self.__create_pre_session(PRE_SESSION_MAGIC, ell , is_negated)
 
-    def __create_pre_session(self, pre_session_magic, pk_hash, is_negated, tweak_is_set = False):
+    def __create_pre_session(self, pre_session_magic, pk_hash, is_negated, tweak_is_set=False):
         pre_session = dict()
         pre_session['pre_session_magic'] = pre_session_magic
         pre_session['pk_hash'] = pk_hash
@@ -160,7 +160,6 @@ class MuSigSession:
             self.signers[i]['nonce'] = nonces[i]
             self.signers[i]['present'] = 1
         return True
-        
         
     def combine_nonces(self):
         """Compute R = R[0] + R[1] + ..., + R[n]"""

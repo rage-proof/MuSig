@@ -20,6 +20,17 @@ curve = EllipticCurve(
     h=1,
 )
 
+
+class ScalarOverflowError(ValueError):
+    def __init__(self, message='Value outside of the group order.'):
+        super().__init__()
+        self.message = message
+ 
+    def __str__(self):
+        return self.message
+    
+    
+
 def point_add(P1, P2):
     if (P1 is None):
         return P2
@@ -82,29 +93,32 @@ def x(P):
 def y(P):
     return P[1]
 
+def scalar_overflow(x):
+    return not (1 <= x <= curve.n - 1)
+
 def chacha20_prng(key, counter):
     nonce = bytes(12)
     chacha20 = ChaCha(key, nonce)
     key_stream = chacha20.key_stream(counter)
     r1 = int_from_bytes(key_stream[:32])
     r2 = int_from_bytes(key_stream[32:])
-    if not (1 <= r1 <= curve.n - 1):
-        raise ValueError
-    if not (1 <= r2 <= curve.n - 1):
-        raise ValueError
+    if scalar_overflow(r1):
+        raise ScalarOverflowError('r1 outside of the group order.')
+    if scalar_overflow(r2):
+        raise ScalarOverflowError('r2 outside of the group order.')
     return [r1, r2]
 
 def pubkey_gen(seckey):
     x = int_from_bytes(seckey)
-    if not (1 <= x <= curve.n - 1):
-        raise ValueError('The secret key must be an integer in the range 1..n-1.')
+    if scalar_overflow(x):
+        raise ScalarOverflowError('Secret key outside of the group order.')
     P = point_mul(curve.G, x)
     return bytes_from_point(P)
 
 def create_key_pair():
     seckey0 = int_from_bytes(os.urandom(32)) % curve.n
-    if not (1 <= seckey0 <= curve.n - 1):
-        raise ValueError('The secret key must be an integer in the range 1..n-1.')
+    if scalar_overflow(seckey0):
+        raise ScalarOverflowError('Secret key outside of the group order.')
     pubkey = point_mul(curve.G, seckey0)
     #seckey = curve.n - seckey0 if not  has_square_y(pubkey) else seckey0
     seckey = seckey0

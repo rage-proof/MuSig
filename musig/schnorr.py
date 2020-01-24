@@ -6,8 +6,8 @@ def schnorr_sign(msg, seckey0):
     if len(msg) != 32:
         raise ValueError('The message must be a 32-byte array.')
     seckey0 = int_from_bytes(seckey0)
-    if not (1 <= seckey0 <= curve.n - 1):
-        raise ValueError('The secret key must be an integer in the range 1..n-1.')
+    if scalar_overflow(seckey0):
+        raise ScalarOverflowError('The secret key must be an integer in the range 1..n-1.')
     P = point_mul(curve.G, seckey0)
     seckey = seckey0 if has_square_y(P) else curve.n - seckey0
     k0 = int_from_bytes(tagged_hash("BIPSchnorrDerive", bytes_from_int(seckey) + msg)) % curve.n

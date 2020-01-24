@@ -18,6 +18,7 @@ def schnorr_sign(msg, seckey0):
     e = int_from_bytes(tagged_hash("BIPSchnorr", bytes_from_point(R) + bytes_from_point(P) + msg)) % curve.n
     return bytes_from_int(R[0]) + bytes_from_int((k + e * seckey) % curve.n)
 
+
 def schnorr_verify(msg, pubkey, sig, tag = 'BIPSchnorr'):
     if len(msg) != 32:
         raise ValueError('The message must be a 32-byte array.')
@@ -38,17 +39,23 @@ def schnorr_verify(msg, pubkey, sig, tag = 'BIPSchnorr'):
         return False
     return True
 
-def schnorr_batch_verify(msgs, pubkeys, sigs):
-    u = len(msgs)
-    if (u != len(pubkeys) or u != len(sigs)):
+
+def schnorr_batch_verify(msgs, pubkeys, sigs, tag = 'BIPSchnorr'):
+    sig_num = len(msgs)
+    if (sig_num != len(pubkeys) or sig_num != len(sigs)):
         raise ValueError('The count of Values must be equally.')
     s_sum = 0
     RP = None
+    seed = hash_sha256(b''.join(sigs) + b''.join(msgs) + b''.join(pubkeys))
+    rand_coefficient = [1]
+    
     for i in range(len(msgs)):
         pubkey = pubkeys[i]
         msg = msgs[i]
         sig = sigs[i]
-        
+        if (i % 2 == 1):
+            rand_coefficient = chacha20_prng(seed, i // 2)
+
         if len(msg) != 32:
             raise ValueError('The message must be a 32-byte array.')
         if len(pubkey) != 32:
@@ -63,14 +70,14 @@ def schnorr_batch_verify(msgs, pubkeys, sigs):
         s = int_from_bytes(sig[32:64])
         if (r >= curve.p or s >= curve.n):
             return False
-        e = int_from_bytes(tagged_hash("BIPSchnorr", sig[0:32] + pubkey + msg)) % curve.n
+        e = int_from_bytes(tagged_hash(tag, sig[0:32] + pubkey + msg)) % curve.n
         
         R = point_from_bytes(sig[0:32])
         if (R is None):
             return False
-        
-        s_sum = (s_sum + s) % curve.n
-        eP = point_mul(P, e)
-        RP = point_add(point_add(R, eP),RP)
+        s_sum = (s_sum + (rand_coefficient[i % 2] * s)) % curve.n
+        eP = point_mul(P, (rand_coefficient[i % 2] * e) % curve.n)
+        aR = point_mul(R, rand_coefficient[i % 2])
+        RP = point_add(point_add(aR, eP),RP)
     return point_mul(curve.G,s_sum) == RP
 

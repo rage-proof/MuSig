@@ -3,6 +3,7 @@
 import collections
 import hashlib
 import os
+from chacha20poly1305 import ChaCha
 
 EllipticCurve = collections.namedtuple('EllipticCurve', 'name p G n h')
 
@@ -81,7 +82,17 @@ def x(P):
 def y(P):
     return P[1]
 
-
+def chacha20_prng(key, counter):
+    nonce = bytes(12)
+    chacha20 = ChaCha(key, nonce)
+    key_stream = chacha20.key_stream(counter)
+    r1 = int_from_bytes(key_stream[:32])
+    r2 = int_from_bytes(key_stream[32:])
+    if not (1 <= r1 <= curve.n - 1):
+        raise ValueError
+    if not (1 <= r2 <= curve.n - 1):
+        raise ValueError
+    return [r1, r2]
 
 def pubkey_gen(seckey):
     x = int_from_bytes(seckey)

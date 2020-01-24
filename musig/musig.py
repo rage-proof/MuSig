@@ -26,7 +26,7 @@ class CombinedPubkey:
         return hash_sha256(p)
 
     def __init__(self, pubkeys, pk_hash = None, pre_session = None):
-        """Compute X = (r[0]*X[0]) + (r[1]*X[1]) + ..., + (r[n]*X[n])"""
+        """Compute X = (r[0]*X[0]) + (r[1]*X[1]) + ... + (r[n]*X[n])"""
         P = None
         ell = pk_hash or CombinedPubkey.musig_compute_ell(pubkeys)
         for i in range(len(pubkeys)):
@@ -39,6 +39,7 @@ class CombinedPubkey:
         self.__pre_session = self.__create_pre_session(PRE_SESSION_MAGIC, ell , is_negated)
 
     def __create_pre_session(self, pre_session_magic, pk_hash, is_negated, tweak_is_set=False):
+        """Creates a dictionary with fixed state values."""
         pre_session = dict()
         pre_session['pre_session_magic'] = pre_session_magic
         pre_session['pk_hash'] = pk_hash
@@ -47,9 +48,11 @@ class CombinedPubkey:
         return pre_session
 
     def get_key(self):
+        """Read the combined public key."""
         return self.__combined_pk
 
     def get_pre_session(self):
+        """Read the pre-session dictionary."""
         return self.__pre_session
 
     def __str__(self):
@@ -204,7 +207,7 @@ class MuSigSession:
         Si = point_mul(curve.G, int_from_bytes(sig))
         Pi = point_from_bytes(pubkey)
         RP = point_add(Si, point_mul(Pi, curve.n - e))
-        # this is needed for the combined nonce only. it's the opposite action to signing.
+        # This is needed for the combined nonce only. it's the opposite action to signing.
         RP = (x(RP), curve.p - y(RP)) if not self.nonce_is_negated else RP
         SUM = point_add(RP, Ri)
         if not is_infinity(SUM):
@@ -212,10 +215,38 @@ class MuSigSession:
         return True
    
     
-    def partial_sig_combine(self, sigs, pubkeys):
+    def partial_sig_combine(self, sigs):
+        """
+        Compute the total signature from an array of partial signatures.
+
+        s_sum = s[0] + s[1] + ...  + s[n]
+        
+        """
         s_sum = 0
         for i in range(len(sigs)):
             s_sum = (s_sum + int_from_bytes(sigs[i])) % curve.n
         self.combined_sig = bytes_from_int(s_sum)
         return self.combined_nonce + self.combined_sig
+
+
+    def partial_sig_adapt(self, sig, secret_adaptor):
+        """compute sig_a' = sig_a + t"""
+        s = int_from_bytes(sig)
+        #todo out of range check
+        t = int_from_bytes(secret_adaptor)
+        if self.nonce_is_negated:
+            t = curve.n - t
+        return (s + t) % curve.n
+    
+            
+    def extract_secret_adaptor(self, sigs, sig):
+        t = int_from_bytes(sig[32:])
+        t = curve.n - t
+        for i in range(len(n_partial_sigs)):
+            s = int_from_bytes(sig[i]) 
+            t = (t+s) % curve.n
+        if not nonce_is_negated:
+            t = curve.n - t
+        return t#to bytes
+        
         

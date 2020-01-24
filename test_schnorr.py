@@ -1,9 +1,9 @@
+#!/usr/bin/env python3
+
 from musig.schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
-from musig.utils import pubkey_gen, create_key_pair
-
-
-
+from musig.utils import pubkey_gen
 import csv
+
 
 def test_vectors():
     all_passed = True

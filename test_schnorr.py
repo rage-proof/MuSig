@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from musig.schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
-from musig.utils import pubkey_gen
+from musig.utils import pubkey_gen, ScalarOverflowError
 import csv
 
 

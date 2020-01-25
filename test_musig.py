@@ -4,9 +4,9 @@ from musig import *
 from musig.schnorr import schnorr_verify
 from musig.utils import create_key_pair, hash_sha256
 
+N_SIGNERS = 3
 
 def main():
-    N_SIGNERS = 3
     seckeys = []
     pubkeys = []
     msg32 = hash_sha256(b'Test')
@@ -51,7 +51,7 @@ def main():
             if not sessions[i].partial_sig_verify(sigs[j], pubkeys[j], j):
                 raise RuntimeError('Signature could not be verified. Index: ', j)
             
-        final_sigs.append(sessions[i].partial_sig_combine(sigs, pubkeys))
+        final_sigs.append(sessions[i].partial_sig_combine(sigs))
 
     if final_sigs[0] != final_sigs[1] or final_sigs[1] != final_sigs[2]:
         print('   * Signature aggregation failed.')

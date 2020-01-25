@@ -25,8 +25,8 @@ def main():
         pub_keys = [bytes.fromhex(p) for p in example['pubKeys'] ]
         private_keys = [bytes.fromhex(p) for p in example['privKeys'] ]
         pub_key_combined = bytes.fromhex(example['pubKeyCombined'])
-        msg =  bytes.fromhex(example['message'])
-        sessions =  [bytes.fromhex(p) for p in example['sessionIds']]
+        msg = bytes.fromhex(example['message'])
+        sessions = [bytes.fromhex(p) for p in example['sessionIds']]
         commitments = [bytes.fromhex(p) for p in example['commitments']]
         secret_keys = [bytes.fromhex(p) for p in example['secretKeys']]
         secret_nonces = [bytes.fromhex(p) for p in example['secretNonces']]

@@ -86,9 +86,9 @@ class MuSigSession:
             raise ValueError('Amount of signers is too large.')
         if pre_session['pre_session_magic'] != PRE_SESSION_MAGIC:
             raise ValueError('Session magic has a wrong value.')
-        
+
         self.msg_is_set = 1
-        self.msg = msg32          
+        self.msg = msg32
         self.combined_pk = combined_pk
         self.pre_session = pre_session
         self.nonce_is_set = 0
@@ -97,64 +97,64 @@ class MuSigSession:
         self.signers = self.__signers_init(self.n_signers)
         self.nonce_commitments_hash_is_set = 0
         self.nonce_commitments_hash = None
-        
+
         # 1 compute secret key
         coefficient = CombinedPubkey.musig_coefficient(self.pre_session['pk_hash'], my_index)
         X = point_mul(curve.G, int_from_bytes(seckey))
         seckey = curve.n - int_from_bytes(seckey) if (not has_square_y(X)) ^ self.pre_session['is_negated'] \
                  else int_from_bytes(seckey)
         self.seckey = (coefficient * seckey) % curve.n
-        
+
         # 2 compute secret nonce
         # DONT use a deterministic nonce! 
         self.secnonce = int_from_bytes(hash_sha256(session_id32 + self.msg + combined_pk + bytes_from_int(seckey))) % curve.n # original no mod
-   
+
         # 3 Compute public nonce and commitment
-        R = point_mul(curve.G, self.secnonce) 
-        self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce        
+        R = point_mul(curve.G, self.secnonce)
+        self.secnonce = curve.n - self.secnonce if not has_square_y(R) else self.secnonce
         self.nonce = bytes_from_point(R)
         self.nonce_commitment = hash_sha256(self.nonce)
 
     def __signers_init(self, n_signers):
         """Initialize the parties in the MuSig session and set their index number."""
-        
+
         signers = []
         for i in range(n_signers):
-            signers.append({'index':i,'present':0})      
+            signers.append({'index':i,'present':0})
         return signers
-        
+
     def get_public_nonce(self, commitments):
         """Receive an array of nonce commitments(H(x(R))) from the other signers and return the public nonce(x(R))."""
-        
+
         if (len(commitments) != self.n_signers or self.has_secret_data == 0):
-            raise ValueError('The number of commitments is incomplete.') 
-        
+            raise ValueError('The number of commitments is incomplete.')
+
         for i in range(self.n_signers):
              if len(commitments[i]) != 32:
                 raise ValueError('The commitment of R must be a 32-byte array.')
-        
+
         nonce_commitments = b''
         for i in range(len(commitments)):
             self.signers[i]['nonce_commitment'] = commitments[i]
             nonce_commitments = nonce_commitments + commitments[i]
         nonce_commitments_hash = hash_sha256(nonce_commitments)
-        
+
         if (nonce_commitments_hash != self.nonce_commitments_hash and self.nonce_commitments_hash_is_set == 1):
             raise ValueError('get_public_nonce has called before with a different set of commitments.')
-        
+
         self.nonce_commitments_hash = nonce_commitments_hash
         self.nonce_commitments_hash_is_set = 1
-        return self.nonce  
-    
+        return self.nonce
+
     def set_nonce(self, nonces):
         """ """
-        
+
         if len(nonces) != self.n_signers:
             return False
-        
+
         if (self.nonce_commitments_hash_is_set == 0):
             return False
-                
+
         for i in range(len(nonces)):
             if len(nonces[i]) != 32:
                 raise ValueError('The nonce (R) must be a 32-byte array.')
@@ -163,22 +163,22 @@ class MuSigSession:
             self.signers[i]['nonce'] = nonces[i]
             self.signers[i]['present'] = 1
         return True
-        
+
     def combine_nonces(self):
         """Compute R = R[0] + R[1] + ..., + R[n]"""
-        
+
         R0 = None
         for i in range(self.n_signers):
             if self.signers[i]['present'] != 1:
-                return False  
+                return False
             R0 = point_add(R0,point_from_bytes(self.signers[i]['nonce']))
 
         self.nonce_is_negated = not has_square_y(R0)
         self.combined_nonce = bytes_from_point(R0)
         self.nonce_is_set = 1
         return True
-    
-    
+
+
     def partial_sign(self, tag = ''):
         if self.nonce_is_set == 0:
             raise ValueError('The combined nonce is missing.')
@@ -186,24 +186,24 @@ class MuSigSession:
             raise ValueError('Not a session initiallized as signer.')
         if self.msg_is_set == 0:
             raise ValueError('The message is missing.')
-            
+
         e = int_from_bytes(tagged_hash(tag, self.combined_nonce + self.combined_pk + self.msg)) % curve.n
         k = curve.n - self.secnonce if self.nonce_is_negated else self.secnonce
         s = (k + (e * self.seckey)) % curve.n
         return bytes_from_int(s)
 
-    
+
     def partial_sig_verify(self, sig, pubkey, i, tag = ''):
         if self.nonce_is_set == 0:
-            raise ValueError('The combined nonce is missing.')          
+            raise ValueError('The combined nonce is missing.')
         if (self.signers[i]['present'] != 1):
             raise RuntimeError('Nonce is missing from party.')
-        
+
         coefficient = CombinedPubkey.musig_coefficient(self.pre_session['pk_hash'], self.signers[i]['index'])
         e = int_from_bytes(tagged_hash(tag, self.combined_nonce + self.combined_pk + self.msg)) % curve.n
         e = curve.n - ((e * coefficient) % curve.n) if self.pre_session['is_negated'] else (e * coefficient) % curve.n
-        
-        Ri = point_from_bytes(self.signers[i]['nonce'])    
+
+        Ri = point_from_bytes(self.signers[i]['nonce'])
         Si = point_mul(curve.G, int_from_bytes(sig))
         Pi = point_from_bytes(pubkey)
         RP = point_add(Si, point_mul(Pi, curve.n - e))
@@ -213,8 +213,8 @@ class MuSigSession:
         if not is_infinity(SUM):
             return False
         return True
-   
-    
+
+
     def partial_sig_combine(self, sigs):
         """
         Compute the total signature from an array of partial signatures.
@@ -232,21 +232,22 @@ class MuSigSession:
     def partial_sig_adapt(self, sig, secret_adaptor):
         """compute sig_a' = sig_a + t"""
         s = int_from_bytes(sig)
-        #todo out of range check
+        if is_scalar_overflow(s):
+            raise ScalarOverflowError
         t = int_from_bytes(secret_adaptor)
         if self.nonce_is_negated:
             t = curve.n - t
         return (s + t) % curve.n
-    
-            
+
+
     def extract_secret_adaptor(self, sigs, sig):
         t = int_from_bytes(sig[32:])
         t = curve.n - t
-        for i in range(len(n_partial_sigs)):
-            s = int_from_bytes(sig[i]) 
+        for i in range(len(self.n_partial_sigs)):
+            s = int_from_bytes(sig[i])
             t = (t+s) % curve.n
-        if not nonce_is_negated:
+        if not self.nonce_is_negated:
             t = curve.n - t
-        return t#to bytes
-        
-        
+        return t #to bytes
+
+

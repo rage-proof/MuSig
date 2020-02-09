@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from musig.schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
-from musig.utils import pubkey_gen, ScalarOverflowError
+from musig.utils import pubkey_gen
 import csv
 
 
@@ -49,17 +49,16 @@ def test_vectors():
                 pubs.append(pubkey)
                 sigs.append(sig)
                 msgs.append(msg)
-    results_all = schnorr_batch_verify(msgs,pubs, sigs)
-    print()
+    results_all = schnorr_batch_verify(msgs, pubs, sigs)
     if results_all == True:
-        print('****Batch verification test passed.')
+        print('\n****Batch verification test passed.****')
     else:
-        print('****Batch verification test failed.')
-    print()
+        print('\n****Batch verification test failed.****')
+        all_passed = False
     if all_passed:
-        print('All test vectors passed.')
+        print('\nAll test vectors passed.')
     else:
-        print('Some test vectors failed.')
+        print('\nSome test vectors failed.')
     return all_passed
 
 if __name__ == '__main__':

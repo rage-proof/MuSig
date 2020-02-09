@@ -2,11 +2,13 @@
 
 from .utils import *
 
-def schnorr_sign(msg, seckey0):
+def schnorr_sign(msg, seckey0, tag = 'BIPSchnorr'):
+    """Sign a message with a scret key."""
+    
     if len(msg) != 32:
         raise ValueError('The message must be a 32-byte array.')
     seckey0 = int_from_bytes(seckey0)
-    if scalar_overflow(seckey0):
+    if is_secret_overflow(seckey0):
         raise ScalarOverflowError('The secret key must be an integer in the range 1..n-1.')
     P = point_mul(curve.G, seckey0)
     seckey = seckey0 if has_square_y(P) else curve.n - seckey0
@@ -15,11 +17,13 @@ def schnorr_sign(msg, seckey0):
         raise RuntimeError('Failure. This happens only with negligible probability.')
     R = point_mul(curve.G, k0)
     k = curve.n - k0 if not has_square_y(R) else k0
-    e = int_from_bytes(tagged_hash("BIPSchnorr", bytes_from_point(R) + bytes_from_point(P) + msg)) % curve.n
+    e = int_from_bytes(tagged_hash(tag, bytes_from_point(R) + bytes_from_point(P) + msg)) % curve.n
     return bytes_from_int(R[0]) + bytes_from_int((k + e * seckey) % curve.n)
 
 
 def schnorr_verify(msg, pubkey, sig, tag = 'BIPSchnorr'):
+    """Verify that a message was indeed signed with a specific secret key."""
+    
     if len(msg) != 32:
         raise ValueError('The message must be a 32-byte array.')
     if len(pubkey) != 32:
@@ -41,9 +45,11 @@ def schnorr_verify(msg, pubkey, sig, tag = 'BIPSchnorr'):
 
 
 def schnorr_batch_verify(msgs, pubkeys, sigs, tag = 'BIPSchnorr'):
+    """Verify a array of messages with an array of public keys."""
+    
     sig_num = len(msgs)
     if (sig_num != len(pubkeys) or sig_num != len(sigs)):
-        raise ValueError('The count of Values must be equally.')
+        raise RuntimeError('The count of Values must be equally.')
     s_sum = 0
     RP = None
     seed = hash_sha256(b''.join(sigs) + b''.join(msgs) + b''.join(pubkeys))

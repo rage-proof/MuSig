@@ -22,14 +22,10 @@ curve = EllipticCurve(
 
 
 class ScalarOverflowError(ValueError):
+    pass
 
-    def __init__(self, message='Value outside of the group order.'):
-        super().__init__()
-        self.message = message
- 
-    def __str__(self):
-        return self.message
-
+class CommitmentVerifyError(RuntimeError):
+    pass
 
 def point_add(P1, P2):
     if (P1 is None):
@@ -106,6 +102,9 @@ def y(P):
 
 
 def is_scalar_overflow(x):
+    return not (x <= curve.n - 1)
+
+def is_secret_overflow(x):
     return not (1 <= x <= curve.n - 1)
 
 
@@ -124,17 +123,8 @@ def chacha20_prng(key, counter):
 
 def pubkey_gen(seckey):
     x = int_from_bytes(seckey)
-    if is_scalar_overflow(x):
+    if is_secret_overflow(x):
         raise ScalarOverflowError('Secret key outside of the group order.')
     P = point_mul(curve.G, x)
     return bytes_from_point(P)
 
-
-def create_key_pair():
-    seckey0 = int_from_bytes(os.urandom(32)) % curve.n
-    if is_scalar_overflow(seckey0):
-        raise ScalarOverflowError('Secret key outside of the group order.')
-    pubkey = point_mul(curve.G, seckey0)
-    # seckey = curve.n - seckey0 if not  has_square_y(pubkey) else seckey0
-    seckey = seckey0
-    return bytes_from_int(seckey), bytes_from_point(pubkey)

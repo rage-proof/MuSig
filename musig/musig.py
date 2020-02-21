@@ -2,7 +2,7 @@
 
 from .utils import *
 
-MUSIG_TAG = hash_sha256(b'MuSig coefficient')
+MUSIG_TAG = 'MuSig coefficient'
 PRE_SESSION_MAGIC = 0xf4adbbdf7c7dd304
 
 
@@ -12,15 +12,14 @@ class CombinedPubkey:
 
     In order to create a combined public key all separate public keys needs provided in advance.
     Compute X = (r[0]*X[0]) + (r[1]*X[1]) + ... + (r[n]*X[n])
-    !!!The order/index of the public keys needs to be the same as in MuSig.!!!
+    !!!The order/index of the public keys needs to be the same as in the MuSig session.!!!
     """
 
     @staticmethod
     def musig_coefficient(ell, idx):
         """Compute r = SHA256(ell, idx). The four bytes of idx are serialized least significant byte first. """
         
-        h = hash_sha256(MUSIG_TAG + MUSIG_TAG + ell + idx.to_bytes(4, byteorder="little"))
-        return int_from_bytes(h) % curve.n
+        return int_from_bytes(tagged_hash(MUSIG_TAG, ell + idx.to_bytes(4, byteorder="little"))) % curve.n
 
     @staticmethod
     def musig_compute_ell(pubkeys: list) -> bytes:
@@ -50,6 +49,8 @@ class CombinedPubkey:
         ell = pk_hash or CombinedPubkey.musig_compute_ell(pubkeys)
         for i in range(len(pubkeys)):
             P_i = point_from_bytes(pubkeys[i])
+            if (P_i is None):
+                raise ValueError('Received a invalid public key. index: {}'.format(i))
             coefficient = CombinedPubkey.musig_coefficient(ell,i)
             summand = point_mul(P_i,coefficient)
             P = point_add(P,summand)
@@ -149,8 +150,6 @@ class MuSigSession:
         self.__nonce = bytes_from_point(R)
         self.__nonce_commitment = hash_sha256(self.__nonce)
 
-    
-    
     def get_nonce_commitment(self):
         """Return the nonce commitment for this signer."""
         
@@ -188,7 +187,9 @@ class MuSigSession:
 
         for i in range(len(nonces)):
             if len(nonces[i]) != 32:
-                raise ValueError('The nonce (R) must be a 32-byte array.')
+                raise ValueError('The nonce (R) must be a 32-byte array. index: {}'.format(i))
+            if point_from_bytes(nonces[i]) is None:
+                raise ValueError('The nonce (R) is invalid curve Point. index: {}'.format(i))
             if self.__signers[i]['nonce_commitment'] != hash_sha256(nonces[i]):
                 raise RuntimeError('The nonce of one or more signers doesn\'t match the commitment. index: {} '.format(i))
             self.__signers[i]['nonce'] = nonces[i]
@@ -206,16 +207,18 @@ class MuSigSession:
         #check for nonce_commitments_hash #https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates/src/modules/musig/main_impl.h
         #add adaptor point
         if adaptor is not None:
-            #if len(adaptor) != 64:
-                #raise ValueError('The adaptor must be a 64-byte array.')
-            R0 = point_add(R0, adaptor)
+            if len(adaptor) != 64:
+                raise ValueError('The adaptor point must be a valid 64-byte array.')
+            public_adaptor = point_from_bytes_xy(adaptor)
+            if public_adaptor is None:
+                raise ValueError('Adaptor is invalid Curve Point')
+            R0 = point_add(R0, public_adaptor)
         self.__nonce_is_negated = not has_square_y(R0)
         self.__combined_nonce = bytes_from_point(R0)
         self.__nonce_is_set = 1
         return True
 
-
-    def partial_sign(self, tag = ''):
+    def partial_sign(self, tag = 'BIPSchnorr'):
         """Compute s = k + e*x with the own secret key and secret nonce."""
         
         if self.__nonce_is_set == 0:
@@ -230,8 +233,7 @@ class MuSigSession:
         s = (k + (e * self.__seckey)) % curve.n
         return bytes_from_int(s)
 
-
-    def partial_sig_verify(self, sig, pubkey, i, tag = ''):
+    def partial_sig_verify(self, sig, pubkey, i, tag = 'BIPSchnorr'):
         """Validate a signature with a public key."""
         
         if self.__nonce_is_set == 0:
@@ -261,7 +263,6 @@ class MuSigSession:
             return False
         return True
 
-
     def partial_sig_combine(self, sigs):
         """
         Compute the sum of all signature from an array of partial signatures.
@@ -284,7 +285,6 @@ class MuSigSession:
         self.__combined_sig = bytes_from_int(s_sum)
         return self.__combined_nonce + self.__combined_sig
 
-
     def partial_sig_adapt(self, sig, secret_adaptor):
         """Compute sig_a' = sig_a + t"""
 
@@ -305,7 +305,6 @@ class MuSigSession:
         if self.__nonce_is_negated:
             t = curve.n - t
         return bytes_from_int((s + t) % curve.n)
-
 
     def extract_secret_adaptor(self, partial_sigs, final_sig):
         """Compute s_sum - s[0] - s[1] - ... - s[n] = t"""
@@ -330,5 +329,3 @@ class MuSigSession:
         if not self.__nonce_is_negated:
             t = curve.n - t
         return bytes_from_int(t)
-
-

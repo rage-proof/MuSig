@@ -5,7 +5,7 @@ Script for functional testing of a complete MuSig multisignature creation.
 import os
 
 from musig import *
-from musig.utils import pubkey_gen, hash_sha256, curve, point_mul, int_from_bytes
+from musig.utils import pubkey_gen, pubkey_gen_xy, hash_sha256
 
 N_SIGNERS = 3
 
@@ -13,8 +13,8 @@ def main():
     seckeys = []
     pubkeys = []
     msg32 = hash_sha256(b'Test')
-    print('Starting test of musig multisignature key aggregation session.')
-    print('\nSigning Parties: {}'.format(N_SIGNERS))
+    print('   Starting test of musig multisignature key aggregation session.')
+    print('\n   Signing Parties: {}'.format(N_SIGNERS))
     for _ in range(N_SIGNERS):
         seckey = os.urandom(32)
         seckeys.append(seckey)
@@ -71,32 +71,35 @@ def main():
         print(' - Final signature validation failed.')
 
 
-    # Test of adaptor signature
+    # Test of Adaptor Signature
     print('\n----------------------------------\n')
-    print('Testing the secret adaptor')
+    print('   Test case Adaptor Signature')
     secret_adaptor = os.urandom(32)
-    public_adaptor = point_mul(curve.G, int_from_bytes(secret_adaptor))
+    public_adaptor = pubkey_gen_xy(secret_adaptor)
     sigs = list()
     for i in range(N_SIGNERS):
         if not sessions[i].combine_nonces(public_adaptor):
             raise ValueError('Combining all nonces together with adaptor failed.')
         sigs.append(sessions[i].partial_sign())
-
+    print(' * Combined nonce with adaptor offset creation successful.')
+    print(' * Creating partial signatures of every signer.')
     final_sigs = list()        
     for  i in range(N_SIGNERS):
         for j in range(N_SIGNERS):
             if not sessions[i].partial_sig_verify(sigs[j], pubkeys[j], j):
                 raise RuntimeError('Signature could not be verified. Index: ', j)
         final_sigs.append(sessions[i].partial_sig_combine(sigs))
+    
     if final_sigs[0] != final_sigs[1] or final_sigs[1] != final_sigs[2]:
-        print(' - Signature aggregation failed.')
+        print(' - Combine signatures failed.')
     else:
-        print(' * Signature aggregation successful.')
+        print(' * Combine signatures successful.')
     if schnorr_verify(msg32, combined_pk.get_key(), final_sigs[2], tag=''):
-        print(' - Final signature validation successful - shouldn\'t be possible with adaptor.')
+        print(' - Combined signature validation successful. Must not be possible with adaptor.')
     else:
-        print(' * Final signature validation failed - as expected with adaptor.')
+        print(' * Combined signature is not valid now.')
 
+    print(' * Bob adds secret adaptor to own signature.')
     alice_id = 0
     bob_id = alice_id + 1
     adaptor_sig = sessions[bob_id].partial_sig_adapt(sigs[bob_id], secret_adaptor)
@@ -104,24 +107,23 @@ def main():
     # replace Bob's partial signature with an adaptor signature
     sigs_bob[bob_id] = adaptor_sig
     # create new combined signature including the secret adaptor
+    print(' * Create new combined signature.')
     combined_sig_adapt = sessions[bob_id].partial_sig_combine(sigs_bob)
     
     if schnorr_verify(msg32, combined_pk.get_key(), combined_sig_adapt, tag=''):
-        print(' * Final signature validation successful.')
+        print(' * Combined signature validation successful.')
     else:
-        print(' - Final signature validation failed.')
+        print(' - Combined signature validation failed.')
 
     sec_adaptor_extract = sessions[alice_id].extract_secret_adaptor(sigs, combined_sig_adapt)
     if sec_adaptor_extract == secret_adaptor:
-        print(' * Secret adaptor was successfully extracted.')
+        print(' * Alice extracted the correct adaptor.')
     else:
-        print(' - Secret adaptor extraction failed.')
+        print(' - Alice extracted the wrong adaptor.')
     
     
     
 
 if __name__ == '__main__':
-    for i in range(5):
-        print('\n\n Round: {} \n\n'.format(i))
-        main()
+    main()
 

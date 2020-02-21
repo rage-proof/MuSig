@@ -56,16 +56,31 @@ def bytes_from_int(x):
 
 
 def bytes_from_point(P):
-    return bytes_from_int(P[0])
+    return bytes_from_int(x(P))
+
+
+def bytes_from_point_xy(P):
+    return bytes_from_int(x(P)) + bytes_from_int(y(P))
 
 
 def point_from_bytes(b):
     x = int_from_bytes(b)
+    if x >= curve.p:
+        return None
     y_sq = (pow(x, 3, curve.p) + 7) % curve.p
     y0 = pow(y_sq, (curve.p + 1) // 4, curve.p)
     if pow(y0, 2, curve.p) != y_sq:
         return None
     return (x, y0)
+
+def point_from_bytes_xy(b):
+    x = int_from_bytes(b[:32])
+    y = int_from_bytes(b[32:])
+    if x >= curve.p or y >= curve.p:
+        return None
+    if pow(y, 2, curve.p) != (pow(x, 3, curve.p) + 7) % curve.p:
+        return None
+    return (x, y)
 
 
 def int_from_bytes(b):
@@ -127,4 +142,13 @@ def pubkey_gen(seckey):
         raise ScalarOverflowError('Secret key outside of the group order.')
     P = point_mul(curve.G, x)
     return bytes_from_point(P)
+
+def pubkey_gen_xy(seckey):
+    x = int_from_bytes(seckey)
+    if is_secret_overflow(x):
+        raise ScalarOverflowError('Secret key outside of the group order.')
+    P = point_mul(curve.G, x)
+    return bytes_from_point_xy(P)
+
+
 

@@ -1,12 +1,12 @@
 """
-Testvectors for MuSig copied from
-https://github.com/guggero/bip-schnorr/blob/master/test/test-vectors-mu-sig.json
+Testvectors for MuSig extracted from
+https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates-with-musig/src/modules/musig/tests_impl.h
 """
 
 import csv
 
-from musig import *
-from musig.utils import hash_sha256, int_from_bytes, pubkey_gen, bytes_from_int
+from musig import CombinedPubkey, MuSigSession
+from musig.utils import pubkey_gen
 
 def main():
     tests = 0
@@ -14,7 +14,7 @@ def main():
         reader = csv.reader(csvfile, delimiter=';')
         reader.__next__()
         i = 1
-        
+        all_vectors = True
         for row in reader:
             (session_id_0, session_id_1, secret_key_0, secret_key_1, msg, pubkey_0, pubkey_1, combined_pubkey, \
              nonce_commitment_0, nonce_commitment_1, public_nonce_0, public_nonce_1, combined_nonce, partial_sig_0 \
@@ -89,6 +89,10 @@ def main():
                 all_passed = False
             if all_passed:
                 print(' * Passed all tests.')
+            else:
+                all_vectors = False
+        if all_vectors:
+            print('\n *** all vectors passed. ***')
             
           
 

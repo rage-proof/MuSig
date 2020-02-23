@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from musig.schnorr import schnorr_sign, schnorr_verify, schnorr_batch_verify
+from musig import schnorr_sign, schnorr_verify, schnorr_batch_verify
 from musig.utils import pubkey_gen
 import csv
 
 
 def test_vectors():
     all_passed = True
-    with open('test-vectors.csv', newline='') as csvfile:
+    with open('schnorr-vectors.csv', newline='') as csvfile:
         reader = csv.reader(csvfile)
         reader.__next__()
         sigs = []

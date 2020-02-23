@@ -4,7 +4,7 @@ Script for functional testing of a complete MuSig multisignature creation.
 """
 import os
 
-from musig import *
+from musig import CombinedPubkey, MuSigSession, schnorr_verify
 from musig.utils import pubkey_gen, pubkey_gen_xy, hash_sha256
 
 N_SIGNERS = 3
@@ -65,7 +65,7 @@ def main():
     else:
         print(' * Signature aggregation successful.')
 
-    if schnorr_verify(msg32, combined_pk.get_key(), final_sigs[0], tag=''):
+    if schnorr_verify(msg32, combined_pk.get_key(), final_sigs[0]):
         print(' * Final signature validation successful.')
     else:
         print(' - Final signature validation failed.')
@@ -94,7 +94,7 @@ def main():
         print(' - Combine signatures failed.')
     else:
         print(' * Combine signatures successful.')
-    if schnorr_verify(msg32, combined_pk.get_key(), final_sigs[2], tag=''):
+    if schnorr_verify(msg32, combined_pk.get_key(), final_sigs[2]):
         print(' - Combined signature validation successful. Must not be possible with adaptor.')
     else:
         print(' * Combined signature is not valid now.')
@@ -110,7 +110,7 @@ def main():
     print(' * Create new combined signature.')
     combined_sig_adapt = sessions[bob_id].partial_sig_combine(sigs_bob)
     
-    if schnorr_verify(msg32, combined_pk.get_key(), combined_sig_adapt, tag=''):
+    if schnorr_verify(msg32, combined_pk.get_key(), combined_sig_adapt):
         print(' * Combined signature validation successful.')
     else:
         print(' - Combined signature validation failed.')

@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
-from musig.version import __version__
+from pymusig.version import __version__
 
 
 setup(
-    name="py-musig",
+    name="pymusig",
     version=__version__,
     python_requires='>=3.5',
     description="Implementation of the MuSig multisignature protocol for python",
@@ -13,7 +13,5 @@ setup(
     license="MIT",
     include_package_data=True,
     packages=find_packages(exclude=["tests"]),
-    install_requires=[
-        'chacha20poly1305==0.0.3'
-    ]
+    install_requires=['chacha20poly1305==0.0.3']
 )

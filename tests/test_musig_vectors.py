@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Testvectors for MuSig extracted from
 https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates-with-musig/src/modules/musig/tests_impl.h
@@ -5,8 +6,8 @@ https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates-with-musig/sr
 
 import csv
 
-from musig import CombinedPubkey, MuSigSession
-from musig.utils import pubkey_gen
+from pymusig import CombinedPubkey, MuSigSession
+from pymusig.utils import pubkey_gen
 
 def main():
     tests = 0

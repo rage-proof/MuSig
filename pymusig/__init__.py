@@ -6,9 +6,6 @@ Paper: https://eprint.iacr.org/2018/068
 
 Reference C implementation:
 https://github.com/ElementsProject/secp256k1-zkp/tree/secp256k1-zkp/src/modules/musig
-
-Javascript implementation:
-https://github.com/guggero/bip-schnorr
 """
 from .musig import CombinedPubkey, MuSigSession
 

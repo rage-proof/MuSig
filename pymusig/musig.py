@@ -25,7 +25,6 @@ class CombinedPubkey:
     def musig_compute_ell(pubkeys: list) -> bytes:
         """Computes ell = SHA256(pk[0], ..., pk[np-1])"""
         
-        #pubkeys.sort(key = int_from_bytes) #rethink
         p = b''
         for pubkey in pubkeys:
             if len(pubkey) != 32:
@@ -204,7 +203,6 @@ class MuSigSession:
             if self.__signers[i]['present'] != 1:
                 raise RuntimeError('The nonce of one or more signers is not correctly set yet. index: {} '.format(i))
             R0 = point_add(R0, point_from_bytes(self.__signers[i]['nonce']))
-        #check for nonce_commitments_hash #https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates/src/modules/musig/main_impl.h
         #add adaptor point
         if adaptor is not None:
             if len(adaptor) != 64:
@@ -256,7 +254,7 @@ class MuSigSession:
         Si = point_mul(curve.G, s)
         Pi = point_from_bytes(pubkey)
         RP = point_add(Si, point_mul(Pi, curve.n - e))
-        # This is needed for the combined nonce only. It's the opposite action to signing.
+        # This is needed for the combined nonce only. It's the opposite action to signing process.
         RP = (x(RP), curve.p - y(RP)) if not self.__nonce_is_negated else RP
         SUM = point_add(RP, Ri)
         if not is_infinity(SUM):

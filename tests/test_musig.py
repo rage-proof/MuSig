@@ -4,8 +4,8 @@ Script for functional testing of a complete MuSig multisignature creation.
 """
 import os
 
-from musig import CombinedPubkey, MuSigSession, schnorr_verify
-from musig.utils import pubkey_gen, pubkey_gen_xy, hash_sha256
+from pymusig import CombinedPubkey, MuSigSession, schnorr_verify
+from pymusig.utils import pubkey_gen, pubkey_gen_xy, hash_sha256
 
 N_SIGNERS = 3
 

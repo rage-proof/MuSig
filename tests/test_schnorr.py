@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-
-from musig import schnorr_sign, schnorr_verify, schnorr_batch_verify
-from musig.utils import pubkey_gen
+"""
+test vectors for schnorr signatures copied from:
+https://github.com/sipa/bips/tree/bip-schnorr/bip-schnorr
+"""
+from pymusig import schnorr_sign, schnorr_verify, schnorr_batch_verify
+from pymusig.utils import pubkey_gen
 import csv
 
 

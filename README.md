@@ -80,4 +80,4 @@ final_sig = session_alice(partial_sig_combine(sigs))
 if schnorr_verify(msg, combined_pk.get_key(), final_sig)
 
 ```
-A detailed example is under '/tests/test_musig.py'
+A detailed example of a signature with three parties is stored in `/tests/test_musig.py`

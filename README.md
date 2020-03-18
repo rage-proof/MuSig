@@ -32,7 +32,7 @@ pip3 install pymusig
 ## Usage
 
 
-```Python
+```python
 
 # multiple signer can create aggregated signature on a combined public key
 # signer Alice and Bob have todo the same steps individually with params

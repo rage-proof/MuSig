@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 test vectors for schnorr signatures copied from:
-https://github.com/sipa/bips/tree/bip-schnorr/bip-schnorr
+https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv
 """
 from pymusig import schnorr_sign, schnorr_verify, schnorr_batch_verify
 from pymusig.utils import pubkey_gen
@@ -17,7 +17,7 @@ def test_vectors():
         pubs = []
         msgs = []
         for row in reader:
-            (index, seckey, pubkey, msg, sig, result, comment) = row
+            (index, seckey, pubkey, aux_rand, msg, sig, result, comment) = row
             pubkey = bytes.fromhex(pubkey)
             msg = bytes.fromhex(msg)
             sig = bytes.fromhex(sig)
@@ -30,7 +30,8 @@ def test_vectors():
                     print(' * Failed key generation.')
                     print('   Expected key:', pubkey.hex().upper())
                     print('     Actual key:', pubkey_actual.hex().upper())
-                sig_actual = schnorr_sign(msg, seckey)
+                aux_rand = bytes.fromhex(aux_rand)
+                sig_actual = schnorr_sign(msg, seckey, aux_rand)
                 if sig == sig_actual:
                     print(' * Passed signing test.')
                 else:
@@ -38,7 +39,7 @@ def test_vectors():
                     print('   Expected signature:', sig.hex().upper())
                     print('     Actual signature:', sig_actual.hex().upper())
                     all_passed = False
-            result_actual = schnorr_verify(msg, pubkey, sig)        
+            result_actual = schnorr_verify(msg, pubkey, sig)
             if result == result_actual:
                 print(' * Passed verification test.')
             else:
@@ -48,12 +49,12 @@ def test_vectors():
                 if comment:
                     print('   Comment:', comment)
                 all_passed = False
-            if result == True:
+            if result is True:
                 pubs.append(pubkey)
                 sigs.append(sig)
                 msgs.append(msg)
     results_all = schnorr_batch_verify(msgs, pubs, sigs)
-    if results_all == True:
+    if results_all is True:
         print('\n****Batch verification test passed.****')
     else:
         print('\n****Batch verification test failed.****')
@@ -63,6 +64,7 @@ def test_vectors():
     else:
         print('\nSome test vectors failed.')
     return all_passed
+
 
 if __name__ == '__main__':
     test_vectors()

@@ -1,28 +1,284 @@
 #!/usr/bin/env python3
 """
-Testvectors for MuSig extracted from
-https://github.com/jonasnick/secp256k1-zkp/blob/schnorrsig-updates-with-musig/src/modules/musig/tests_impl.h
+Testvectors for MuSig2 extracted from
+https://github.com/ElementsProject/secp256k1-zkp/blob/master/src/modules/musig/tests_impl.h
 """
 
 import csv
-
 from pymusig import CombinedPubkey, MuSigSession
-from pymusig.utils import pubkey_gen
+from pymusig.utils import compress_pubkey_xy, bytes_from_int, pubkey_gen, point_mul, curve, \
+    int_from_bytes, bytes_from_point_xy, point_from_compressed_bytes, pubkey_gen_xy
 
-def main():
-    tests = 0
-    with open('musig_vectors.csv', 'r') as csvfile:
+
+class TestMuSigSession(MuSigSession):
+    """
+        A Class inherited for testing only.
+    """
+
+    def set_predefined_nonces(self, secnonces):
+        self.secnonces = [int_from_bytes(secnonces[0]), int_from_bytes(secnonces[1])]
+        self.pubnonces = []
+        for i in range(2):
+            R = point_mul(curve.G, self.secnonces[i])
+            self.pubnonces.append(bytes_from_point_xy(R))
+        self.nonce_is_set = 1
+
+    def set_predefined_aggnonces(self, agg_nonces):
+        if self.nonce_is_set == 0:
+            raise RuntimeError('The local nonces needs to be set before calculating the aggregated ones.')
+        self.agg_nonces = [None, None]
+        self.agg_nonces[0] = agg_nonces[0]
+        self.agg_nonces[1] = agg_nonces[1]
+        self.agg_nonces_set = 1
+
+
+def create_byte(array: list):
+    hex_key = ''.join('{:02X}'.format(a) for a in array)
+    return bytes.fromhex(hex_key)
+
+
+vec_pk = list()
+vec_pk.append(create_byte([
+    0xF9, 0x30, 0x8A, 0x01, 0x92, 0x58, 0xC3, 0x10,
+    0x49, 0x34, 0x4F, 0x85, 0xF8, 0x9D, 0x52, 0x29,
+    0xB5, 0x31, 0xC8, 0x45, 0x83, 0x6F, 0x99, 0xB0,
+    0x86, 0x01, 0xF1, 0x13, 0xBC, 0xE0, 0x36, 0xF9]))
+vec_pk.append(create_byte([
+    0xDF, 0xF1, 0xD7, 0x7F, 0x2A, 0x67, 0x1C, 0x5F,
+    0x36, 0x18, 0x37, 0x26, 0xDB, 0x23, 0x41, 0xBE,
+    0x58, 0xFE, 0xAE, 0x1D, 0xA2, 0xDE, 0xCE, 0xD8,
+    0x43, 0x24, 0x0F, 0x7B, 0x50, 0x2B, 0xA6, 0x59]))
+vec_pk.append(create_byte([
+    0x35, 0x90, 0xA9, 0x4E, 0x76, 0x8F, 0x8E, 0x18,
+    0x15, 0xC2, 0xF2, 0x4B, 0x4D, 0x80, 0xA8, 0xE3,
+    0x14, 0x93, 0x16, 0xC3, 0x51, 0x8C, 0xE7, 0xB7,
+    0xAD, 0x33, 0x83, 0x68, 0xD0, 0x38, 0xCA, 0x66]))
+
+
+def combined_pubkey_vectors():
+    passed = True
+    agg_pk_expected = list()
+    agg_pk_expected.append(create_byte([
+        0xE5, 0x83, 0x01, 0x40, 0x51, 0x21, 0x95, 0xD7,
+        0x4C, 0x83, 0x07, 0xE3, 0x96, 0x37, 0xCB, 0xE5,
+        0xFB, 0x73, 0x0E, 0xBE, 0xAB, 0x80, 0xEC, 0x51,
+        0x4C, 0xF8, 0x8A, 0x87, 0x7C, 0xEE, 0xEE, 0x0B]))
+    agg_pk_expected.append(create_byte([
+        0xD7, 0x0C, 0xD6, 0x9A, 0x26, 0x47, 0xF7, 0x39,
+        0x09, 0x73, 0xDF, 0x48, 0xCB, 0xFA, 0x2C, 0xCC,
+        0x40, 0x7B, 0x8B, 0x2D, 0x60, 0xB0, 0x8C, 0x5F,
+        0x16, 0x41, 0x18, 0x5C, 0x79, 0x98, 0xA2, 0x90]))
+    agg_pk_expected.append(create_byte([
+        0x81, 0xA8, 0xB0, 0x93, 0x91, 0x2C, 0x9E, 0x48,
+        0x14, 0x08, 0xD0, 0x97, 0x76, 0xCE, 0xFB, 0x48,
+        0xAE, 0xB8, 0xB6, 0x54, 0x81, 0xB6, 0xBA, 0xAF,
+        0xB3, 0xC5, 0x81, 0x01, 0x06, 0x71, 0x7B, 0xEB]))
+    agg_pk_expected.append(create_byte([
+        0x2E, 0xB1, 0x88, 0x51, 0x88, 0x7E, 0x7B, 0xDC,
+        0x5E, 0x83, 0x0E, 0x89, 0xB1, 0x9D, 0xDB, 0xC2,
+        0x80, 0x78, 0xF1, 0xFA, 0x88, 0xAA, 0xD0, 0xAD,
+        0x01, 0xCA, 0x06, 0xFE, 0x4F, 0x80, 0x21, 0x0B]))
+    for i in range(4):
+        if i == 0:
+            pk = [vec_pk[0], vec_pk[1], vec_pk[2]]
+        elif i == 1:
+            pk = [vec_pk[2], vec_pk[1], vec_pk[0]]
+        elif i == 2:
+            pk = [vec_pk[0], vec_pk[0], vec_pk[0]]
+        elif i == 3:
+            pk = [vec_pk[0], vec_pk[0], vec_pk[1], vec_pk[1]]
+        combined_pubkey = CombinedPubkey(pk)
+        if combined_pubkey.get_xpubkey() != agg_pk_expected[i]:
+            passed = False
+            print(' - Failed combined pubkey vectors. Index: {}'.format(i))
+    if passed == True:
+        print(' * Passed combined pubkey vectors.')
+
+
+def nonce_gen_vectors():
+    passed = True
+    k32_expected = list()
+    k32_expected.append([create_byte([
+        0x8D, 0xD0, 0x99, 0x51, 0x79, 0x50, 0x5E, 0xB1,
+        0x27, 0x3A, 0x07, 0x11, 0x58, 0x23, 0xC8, 0x6E,
+        0xF7, 0x14, 0x39, 0x0F, 0xDE, 0x2D, 0xEE, 0xB6,
+        0xF9, 0x31, 0x6A, 0xEE, 0xBE, 0x5C, 0x71, 0xFC]),
+        create_byte([
+            0x73, 0x29, 0x2E, 0x47, 0x11, 0x34, 0x7D, 0xD3,
+            0x9E, 0x36, 0x05, 0xEE, 0xD6, 0x45, 0x65, 0x49,
+            0xB3, 0x0F, 0x3B, 0xC7, 0x16, 0x22, 0x5A, 0x18,
+            0x65, 0xBA, 0xE1, 0xD9, 0x84, 0xEF, 0xF8, 0x9D])])
+    k32_expected.append([create_byte([
+        0x67, 0x02, 0x5A, 0xF2, 0xA3, 0x56, 0x0B, 0xFC,
+        0x1D, 0x95, 0xBD, 0xA6, 0xB2, 0x0B, 0x21, 0x50,
+        0x97, 0x63, 0xDB, 0x17, 0x3B, 0xD9, 0x37, 0x30,
+        0x17, 0x24, 0x66, 0xEC, 0xAF, 0xA2, 0x60, 0x3B]),
+        create_byte([
+            0x0B, 0x1D, 0x9E, 0x8F, 0x43, 0xBD, 0xAE, 0x69,
+            0x99, 0x6E, 0x0E, 0x3A, 0xBC, 0x30, 0x06, 0x4C,
+            0x52, 0x37, 0x3E, 0x05, 0x3E, 0x70, 0xC6, 0xD6,
+            0x18, 0x4B, 0xFA, 0xDA, 0xE0, 0xF0, 0xE2, 0xD9])])
+    k32_expected.append([create_byte([
+        0xA6, 0xC3, 0x24, 0xC7, 0xE8, 0xD1, 0x8A, 0xAA,
+        0x59, 0xD7, 0xB4, 0x74, 0xDD, 0x73, 0x82, 0x6D,
+        0x7E, 0x74, 0x91, 0x3F, 0x9B, 0x36, 0x12, 0xE4,
+        0x4F, 0x28, 0x6E, 0x07, 0x54, 0x14, 0x58, 0x21]),
+        create_byte([
+            0x4E, 0x75, 0xD3, 0x81, 0xCD, 0xB7, 0x3C, 0x68,
+            0xA0, 0x7E, 0x64, 0x15, 0xE0, 0x0E, 0x89, 0x32,
+            0x44, 0x21, 0x87, 0x4F, 0x4E, 0x03, 0xE8, 0x67,
+            0x73, 0x4E, 0x33, 0x20, 0xCE, 0x24, 0xBA, 0x8E])])
+    args = list()
+    for i in range(5):
+        args.append(create_byte([i for _ in range(32)]))
+    secnonces = [MuSigSession.nonce_function(args[0], args[1], args[2], args[3], args[4]),
+                 MuSigSession.nonce_function(args[0], None, args[2], args[3], args[4]),
+                 MuSigSession.nonce_function(args[0], None, None, None, None)]
+
+    for i in range(3):
+        for j in range(2):
+            if k32_expected[i][j] != bytes_from_int(secnonces[i][j]):
+                passed = False
+                print(' - Failed nonce generation vectors. Test: {}, K: {}'.format(i, j))
+    if passed:
+        print(' * Passed nonce generation vectors.')
+
+
+def sign_vectors():
+    def sign_vectors_helper(sig_pos, adaptor = None, tweak = None):
+        pk_vector_list = [0, 0, 0]
+        pk_vector_list[sig_pos] = pubkey_gen(sk)
+        for i in range(3):
+            if i != sig_pos:
+                offset = 0 if i < sig_pos else -1
+                pk_vector_list[i] = pk[i + offset]
+        combined_pubkey = CombinedPubkey(pk_vector_list)
+        if tweak is not None:
+            combined_pubkey.pubkey_tweak_add(tweak)
+        session = TestMuSigSession(msg, 3, sk, combined_pubkey.get_pubkey(), combined_pubkey.get_pre_session(), msg)
+        session.set_predefined_nonces(secnonce)
+        agg_nonces = list()
+        agg_nonces.append(bytes_from_point_xy(point_from_compressed_bytes(agg_pubnonce[0])))
+        agg_nonces.append(bytes_from_point_xy(point_from_compressed_bytes(agg_pubnonce[1])))
+        session.set_predefined_aggnonces(agg_nonces)
+        session.combine_nonces(adaptor=adaptor)
+        return session.partial_sign()
+
+    passed = True
+    secnonce = list()
+    agg_pubnonce = list()
+    pk = [vec_pk[0], vec_pk[1]]
+
+    secnonce.append(create_byte([
+        0x50, 0x8B, 0x81, 0xA6, 0x11, 0xF1, 0x00, 0xA6,
+        0xB2, 0xB6, 0xB2, 0x96, 0x56, 0x59, 0x08, 0x98,
+        0xAF, 0x48, 0x8B, 0xCF, 0x2E, 0x1F, 0x55, 0xCF,
+        0x22, 0xE5, 0xCF, 0xB8, 0x44, 0x21, 0xFE, 0x61]))
+    secnonce.append(create_byte([
+        0xFA, 0x27, 0xFD, 0x49, 0xB1, 0xD5, 0x00, 0x85,
+        0xB4, 0x81, 0x28, 0x5E, 0x1C, 0xA2, 0x05, 0xD5,
+        0x5C, 0x82, 0xCC, 0x1B, 0x31, 0xFF, 0x5C, 0xD5,
+        0x4A, 0x48, 0x98, 0x29, 0x35, 0x59, 0x01, 0xF7]))
+
+    agg_pubnonce.append(create_byte([
+        0x02,
+        0x84, 0x65, 0xFC, 0xF0, 0xBB, 0xDB, 0xCF, 0x44,
+        0x3A, 0xAB, 0xCC, 0xE5, 0x33, 0xD4, 0x2B, 0x4B,
+        0x5A, 0x10, 0x96, 0x6A, 0xC0, 0x9A, 0x49, 0x65,
+        0x5E, 0x8C, 0x42, 0xDA, 0xAB, 0x8F, 0xCD, 0x61]))
+    agg_pubnonce.append(create_byte([
+        0x03,
+        0x74, 0x96, 0xA3, 0xCC, 0x86, 0x92, 0x6D, 0x45,
+        0x2C, 0xAF, 0xCF, 0xD5, 0x5D, 0x25, 0x97, 0x2C,
+        0xA1, 0x67, 0x5D, 0x54, 0x93, 0x10, 0xDE, 0x29,
+        0x6B, 0xFF, 0x42, 0xF7, 0x2E, 0xEE, 0xA8, 0xC9]))
+    sk = create_byte([
+        0x7F, 0xB9, 0xE0, 0xE6, 0x87, 0xAD, 0xA1, 0xEE,
+        0xBF, 0x7E, 0xCF, 0xE2, 0xF2, 0x1E, 0x73, 0xEB,
+        0xDB, 0x51, 0xA7, 0xD4, 0x50, 0x94, 0x8D, 0xFE,
+        0x8D, 0x76, 0xD7, 0xF2, 0xD1, 0x00, 0x76, 0x71
+    ])
+    msg = create_byte([
+        0xF9, 0x54, 0x66, 0xD0, 0x86, 0x77, 0x0E, 0x68,
+        0x99, 0x64, 0x66, 0x42, 0x19, 0x26, 0x6F, 0xE5,
+        0xED, 0x21, 0x5C, 0x92, 0xAE, 0x20, 0xBA, 0xB5,
+        0xC9, 0xD7, 0x9A, 0xDD, 0xDD, 0xF3, 0xC0, 0xCF
+    ])
+    # expected resulting signatures
+    sig_expected = [create_byte([
+        0x68, 0x53, 0x7C, 0xC5, 0x23, 0x4E, 0x50, 0x5B,
+        0xD1, 0x40, 0x61, 0xF8, 0xDA, 0x9E, 0x90, 0xC2,
+        0x20, 0xA1, 0x81, 0x85, 0x5F, 0xD8, 0xBD, 0xB7,
+        0xF1, 0x27, 0xBB, 0x12, 0x40, 0x3B, 0x4D, 0x3B
+    ]),
+    create_byte([
+        0x2D, 0xF6, 0x7B, 0xFF, 0xF1, 0x8E, 0x3D, 0xE7,
+        0x97, 0xE1, 0x3C, 0x64, 0x75, 0xC9, 0x63, 0x04,
+        0x81, 0x38, 0xDA, 0xEC, 0x5C, 0xB2, 0x0A, 0x35,
+        0x7C, 0xEC, 0xA7, 0xC8, 0x42, 0x42, 0x95, 0xEA
+    ]),
+    create_byte([
+        0x0D, 0x5B, 0x65, 0x1E, 0x6D, 0xE3, 0x4A, 0x29,
+        0xA1, 0x2D, 0xE7, 0xA8, 0xB4, 0x18, 0x3B, 0x4A,
+        0xE6, 0xA7, 0xF7, 0xFB, 0xE1, 0x5C, 0xDC, 0xAF,
+        0xA4, 0xA3, 0xD1, 0xBC, 0xAA, 0xBC, 0x75, 0x17
+    ]),
+    create_byte([
+        0x5E, 0x24, 0xC7, 0x49, 0x6B, 0x56, 0x5D, 0xEB,
+        0xC3, 0xB9, 0x63, 0x9E, 0x6F, 0x13, 0x04, 0xA2,
+        0x15, 0x97, 0xF9, 0x60, 0x3D, 0x3A, 0xB0, 0x5B,
+        0x49, 0x13, 0x64, 0x17, 0x75, 0xE1, 0x37, 0x5B
+    ]),
+    create_byte([
+        0xD7, 0x67, 0xD0, 0x7D, 0x9A, 0xB8, 0x19, 0x8C,
+        0x9F, 0x64, 0xE3, 0xFD, 0x9F, 0x7B, 0x8B, 0xAA,
+        0xC6, 0x05, 0xF1, 0x8D, 0xFF, 0x18, 0x95, 0x24,
+        0x2D, 0x93, 0x95, 0xD9, 0xC8, 0xE6, 0xDD, 0x7C
+    ])]
+
+    if sig_expected[0] != sign_vectors_helper(0):
+        passed = False
+        print(' - Failed signing test vector 1.')
+    if sig_expected[1] != sign_vectors_helper(1):
+        passed = False
+        print(' - Failed signing test vector 2.')
+    if sig_expected[2] != sign_vectors_helper(2):
+        passed = False
+        print(' - Failed signing test vector 3.')
+    tweak = create_byte([
+        0xE8, 0xF7, 0x91, 0xFF, 0x92, 0x25, 0xA2, 0xAF,
+        0x01, 0x02, 0xAF, 0xFF, 0x4A, 0x9A, 0x72, 0x3D,
+        0x96, 0x12, 0xA6, 0x82, 0xA2, 0x5E, 0xBE, 0x79,
+        0x80, 0x2B, 0x26, 0x3C, 0xDF, 0xCD, 0x83, 0xBB
+    ])
+    if sig_expected[3] != sign_vectors_helper(2, tweak=tweak):
+        passed = False
+        print(' - Failed signing test vector 4.')
+    sec_adaptor = create_byte([
+        0xD5, 0x6A, 0xD1, 0x85, 0x00, 0xF2, 0xD7, 0x8A,
+        0xB9, 0x54, 0x80, 0x53, 0x76, 0xF3, 0x9D, 0x1B,
+        0x6D, 0x62, 0x04, 0x95, 0x12, 0x39, 0x04, 0x6D,
+        0x99, 0x3A, 0x9C, 0x31, 0xE0, 0xF4, 0x78, 0x71
+    ])
+    pub_adaptor = pubkey_gen_xy(sec_adaptor)
+    if sig_expected[4] != sign_vectors_helper(2, adaptor=pub_adaptor):
+        passed = False
+        print(' - Failed signing test vector 5.')
+    if passed:
+        print(' * Passed signing test vectors.')
+
+
+def musig_simple_test():
+    print('\nStarting MuSig simple Test.')
+    with open('musig2_vectors.csv', 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=';')
         reader.__next__()
         i = 1
         all_vectors = True
         for row in reader:
-            (session_id_0, session_id_1, secret_key_0, secret_key_1, msg, pubkey_0, pubkey_1, combined_pubkey, \
-             nonce_commitment_0, nonce_commitment_1, public_nonce_0, public_nonce_1, combined_nonce, partial_sig_0 \
-             ,partial_sig_1, final_sig) = row
-            print('\nTest vector #{}:'.format(i))
+            (session_id_0, session_id_1, secret_key_0, secret_key_1, msg, pubkey_0, pubkey_1, combined_pubkey,
+             aggnonce, fin_nonce, partial_sig_0, partial_sig_1, final_sig) = row
             i += 1
-            
             msg = bytes.fromhex(msg)
             session_id_0 = bytes.fromhex(session_id_0)
             session_id_1 = bytes.fromhex(session_id_1)
@@ -31,71 +287,62 @@ def main():
             pubkey_0 = bytes.fromhex(pubkey_0)
             pubkey_1 = bytes.fromhex(pubkey_1)
             combined_pubkey = bytes.fromhex(combined_pubkey)
-            nonce_commitment_0 = bytes.fromhex(nonce_commitment_0)
-            nonce_commitment_1 = bytes.fromhex(nonce_commitment_1)
-            public_nonce_0 = bytes.fromhex(public_nonce_0)
-            public_nonce_1 = bytes.fromhex(public_nonce_1)
-            combined_nonce = bytes.fromhex(combined_nonce)
+            aggnonce = bytes.fromhex(aggnonce)
+            fin_nonce = bytes.fromhex(fin_nonce)
             partial_sig_0 = bytes.fromhex(partial_sig_0)
             partial_sig_1 = bytes.fromhex(partial_sig_1)
             final_sig = bytes.fromhex(final_sig)
-
             pubkey_actual = list()
             pubkey_actual.append(pubkey_gen(secret_key_0))
             pubkey_actual.append(pubkey_gen(secret_key_1))
             if pubkey_actual[0] == pubkey_0 and pubkey_actual[1] == pubkey_1:
                 all_passed = True
             else:
-                print(' * Failed key generation.')
+                print(' - Failed key generation. Test:{}'.format(i))
                 all_passed = False
-                      
+
             combined_pk = CombinedPubkey(pubkey_actual)
-            combined_pk_actual = combined_pk.get_key()
+            combined_pk_actual = combined_pk.get_xpubkey()
             pre_session_actual = combined_pk.get_pre_session()
             if combined_pk_actual != combined_pubkey:
-                print(' * Failed pubkey aggregation.')
+                print(' - Failed pubkey aggregation. Test:{}'.format(i))
                 all_passed = False
 
             sessions = list()
-            nonce_commitments_actual = list()
-            sessions.append(MuSigSession(session_id_0, 2, 0, secret_key_0, combined_pk_actual, pre_session_actual, msg))
-            sessions.append(MuSigSession(session_id_1, 2, 1, secret_key_1, combined_pk_actual, pre_session_actual, msg))
-            nonce_commitments_actual.append(sessions[0].get_nonce_commitment())
-            nonce_commitments_actual.append(sessions[1].get_nonce_commitment())
-            if nonce_commitments_actual[0] != nonce_commitment_0 or nonce_commitments_actual[1] != nonce_commitment_1:
-                print(' * Failed nonce commitment creation.')               
-                all_passed = False
-
-            nonces_actual = list()
-            nonces_actual.append(sessions[0].get_public_nonce(nonce_commitments_actual))
-            nonces_actual.append(sessions[1].get_public_nonce(nonce_commitments_actual))
-            if nonces_actual[0] != public_nonce_0 or nonces_actual[1] != public_nonce_1:
-                print(' * Failed public nonce creation.')
-                all_passed = False
-
-            sessions[0].set_nonce(nonces_actual)
-            sessions[1].set_nonce(nonces_actual)
+            sessions.append(MuSigSession(session_id_0, 2, secret_key_0, combined_pk.get_pubkey(), pre_session_actual, msg))
+            sessions.append(MuSigSession(session_id_1, 2, secret_key_1, combined_pk.get_pubkey(), pre_session_actual, msg))
+            sessions[0].create_nonces(use_msg=False, use_seckey=True, use_pk=False )
+            sessions[1].create_nonces(use_msg=False, use_seckey=True, use_pk=False )
+            pubnonces_actual = list()
+            pubnonces_actual.append(sessions[0].get_pubnonces())
+            pubnonces_actual.append(sessions[1].get_pubnonces())
+            if not sessions[0].set_nonces(pubnonces_actual):
+                print(' - Failed aggnonce creation. Test:{}'.format(i))
+            if not sessions[1].set_nonces(pubnonces_actual):
+                print(' - Failed aggnonce creation. Test:{}'.format(i));
             sessions[0].combine_nonces()
             sessions[1].combine_nonces()
             partial_sigs_actual = list()
             partial_sigs_actual.append(sessions[0].partial_sign())
             partial_sigs_actual.append(sessions[1].partial_sign())
             if partial_sigs_actual[0] != partial_sig_0 or partial_sigs_actual[1] != partial_sig_1:
-                print(' * Failed partial_sig creation.')
+                print(' - Failed partial_sig creation. Test:{}'.format(i))
                 all_passed = False
-            
+
             final_sig_actual = sessions[0].partial_sig_combine(partial_sigs_actual)
             if final_sig_actual != final_sig:
-                print(' * Failed combine final signature.')
+                print(' - Failed combine final signature. Test:{}'.format(i))
                 all_passed = False
-            if all_passed:
-                print(' * Passed all tests.')
-            else:
+            if not all_passed:
+                print(' - Test: {} failed.'.format(i))
                 all_vectors = False
         if all_vectors:
-            print('\n *** all vectors passed. ***')
-            
-          
+            print('\n *** all test vectors passed. ***\n')
+        else:
+            print('\n - some test vectors failed.\n')
 
 if __name__ == '__main__':
-    main()
+    musig_simple_test()
+    combined_pubkey_vectors()
+    nonce_gen_vectors()
+    sign_vectors()

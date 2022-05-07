@@ -2,7 +2,6 @@
 
 import collections
 import hashlib
-import os
 from chacha20poly1305 import ChaCha
 
 EllipticCurve = collections.namedtuple('EllipticCurve', 'name p G n h')
@@ -27,6 +26,12 @@ class ScalarOverflowError(ValueError):
 class CommitmentVerifyError(RuntimeError):
     pass
 
+def x(P):
+    return P[0]
+
+def y(P):
+    return P[1]
+
 def point_add(P1, P2):
     if (P1 is None):
         return P2
@@ -50,28 +55,44 @@ def point_mul(P, n):
         P = point_add(P, P)
     return R
 
-
 def bytes_from_int(x):
     return x.to_bytes(32, byteorder="big")
-
 
 def bytes_from_point(P):
     return bytes_from_int(x(P))
 
+def compress_pubkey_xy(b):
+    P = point_from_bytes_xy(b)
+    return ((2).to_bytes(1, 'little') if has_even_y(P) else (3).to_bytes(1, 'little')) + bytes_from_point(P)
 
 def bytes_from_point_xy(P):
     return bytes_from_int(x(P)) + bytes_from_int(y(P))
 
+def xor_bytes(b0: bytes, b1: bytes) -> bytes:
+    return bytes(x ^ y for (x, y) in zip(b0, b1))
+
+def point_from_compressed_bytes(b):
+    parity = int_from_bytes(b[:1])
+    x = int_from_bytes(b[1:])
+    if x >= curve.p:
+        return None
+    y_sq = (pow(x, 3, curve.p) + 7) % curve.p
+    y = pow(y_sq, (curve.p + 1) // 4, curve.p)
+    if pow(y, 2, curve.p) != y_sq:
+        return None
+    if (y & 1) == 0 and parity == 3:
+        y = curve.p-y
+    return (x, y)
 
 def point_from_bytes(b):
     x = int_from_bytes(b)
     if x >= curve.p:
         return None
     y_sq = (pow(x, 3, curve.p) + 7) % curve.p
-    y0 = pow(y_sq, (curve.p + 1) // 4, curve.p)
-    if pow(y0, 2, curve.p) != y_sq:
+    y = pow(y_sq, (curve.p + 1) // 4, curve.p)
+    if pow(y, 2, curve.p) != y_sq:
         return None
-    return (x, y0)
+    return (x, y if y & 1 == 0 else curve.p-y)
 
 def point_from_bytes_xy(b):
     x = int_from_bytes(b[:32])
@@ -86,42 +107,22 @@ def point_from_bytes_xy(b):
 def int_from_bytes(b):
     return int.from_bytes(b, byteorder="big")
 
-
-def tagged_hash(tag, msg):
-    tag_hash = hashlib.sha256(tag.encode()).digest()
-    return hashlib.sha256(tag_hash + tag_hash + msg).digest()
-
-
 def hash_sha256(b):
     return hashlib.sha256(b).digest()
 
+def tagged_hash(tag, msg):
+    tag_hash = hash_sha256(tag.encode())
+    return hash_sha256(tag_hash + tag_hash + msg)
 
 def is_infinity(P):
     return P is None
 
-
-def is_square(x):
-    return pow(x, (curve.p - 1) // 2, curve.p) == 1
-
-
-def has_square_y(P):
-    return not is_infinity(P) and is_square(y(P))
-
-
-def x(P):
-    return P[0]
-
-
-def y(P):
-    return P[1]
-
-
-def is_scalar_overflow(x):
-    return not (x <= curve.n - 1)
+def has_even_y(P) -> bool:
+    assert not is_infinity(P)
+    return y(P) % 2 == 0
 
 def is_secret_overflow(x):
     return not (1 <= x <= curve.n - 1)
-
 
 def chacha20_prng(key, counter):
     nonce = bytes(12)
@@ -129,12 +130,11 @@ def chacha20_prng(key, counter):
     key_stream = chacha20.key_stream(counter)
     r1 = int_from_bytes(key_stream[:32])
     r2 = int_from_bytes(key_stream[32:])
-    if is_scalar_overflow(r1):
+    if is_secret_overflow(r1):
         raise ScalarOverflowError('r1 outside of the group order.')
-    if is_scalar_overflow(r2):
+    if is_secret_overflow(r2):
         raise ScalarOverflowError('r2 outside of the group order.')
     return [r1, r2]
-
 
 def pubkey_gen(seckey):
     x = int_from_bytes(seckey)

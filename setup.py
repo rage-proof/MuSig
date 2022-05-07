@@ -10,7 +10,7 @@ setup(
     name="pymusig",
     version=__version__,
     python_requires='>=3.5',
-    description="Implementation of the MuSig multisignature protocol for python",
+    description="Implementation of the MuSig2 multi-signature protocol for python",
     long_description=README,
     long_description_content_type="text/markdown",
     author="rage-proof",

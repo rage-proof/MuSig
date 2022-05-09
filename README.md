@@ -1,6 +1,6 @@
 # MuSig multisignatures for Python
 
-This is a Python implementation of the [MuSig](https://eprint.iacr.org/2018/068) multisignature scheme, proposed by several Bitcoin contributors.
+This is a Python implementation of the [MuSig2](https://eprint.iacr.org/2018/068) multisignature scheme, proposed by several Bitcoin contributors.
 It's a scheme to create aggregated multisignatures securly and trustlessly between different signing participants. The signature scheme in use is the schnorr signature scheme.
 Changes that will happen in the future to the draft or the reference implementation will be adjusted here.
 
@@ -22,13 +22,6 @@ git clone git://github.com/rage-proof/MuSig.git
 cd MuSig
 python3 setup.py install
 ```
-
-**or PyPI:**
-
-```sh
-pip3 install pymusig
-```
-
 ## Usage
 
 

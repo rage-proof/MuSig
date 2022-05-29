@@ -189,22 +189,23 @@ class MuSigSession:
         if id is None:
             raise ValueError('The session id must not be None.')
         secnonces = []
-        # 1 compute secret nonces
+        # compute secret nonces
         # DONT use a deterministic nonce!
-        input = id
-        extra_inputs = []
-        extra_inputs.append(msg)
-        extra_inputs.append(key)
-        extra_inputs.append(pk)
-        extra_inputs.append(extra_input)
-        for i in range(4):
-            if extra_inputs[i] is not None:
-                input = input + (32).to_bytes(1, 'big') + extra_inputs[i]
-            else:
-                input = input + (0).to_bytes(1, 'big')
-        seed = tagged_hash('MuSig/nonce', input)
+        if key is not None:
+            rand = bytearray(tagged_hash('MuSig/aux', id))
+            for i in range(32):
+                rand[i] = rand[i] ^ key[i]
+        else:
+            rand = id
+
+        input = rand
+        input += (32).to_bytes(1, 'big') + pk if pk is not None else (0).to_bytes(1, 'big')
+        input += (32).to_bytes(1, 'big') + msg if msg is not None else (0).to_bytes(1, 'big')
+        input += (0).to_bytes(3, 'big')
+        input += (32).to_bytes(1, 'big') + extra_input if extra_input is not None else (0).to_bytes(1, 'big')
         for i in range(2):
-            secnonces.append(int_from_bytes(hash_sha256(seed + i.to_bytes(1, 'big'))))
+            tmp = input + i.to_bytes(1, 'big')
+            secnonces.append(int_from_bytes(tagged_hash('MuSig/nonce', tmp)))
         return secnonces
 
     def get_pubnonces(self):

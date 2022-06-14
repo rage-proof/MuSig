@@ -6,7 +6,7 @@ Changes that will happen in the future to the draft or the reference implementat
 
 The schnorr specification is defined in BIP-340 and the code and test vectors are used from [here](https://github.com/bitcoin/bips/tree/master/bip-0340).
 
-The MuSig code is following the implementation for libsecp256k1 as well as the test vectors are extracted from that [implementation](https://github.com/jonasnick/secp256k1-zkp).
+The MuSig code is following the implementation for libsecp256k1 as well as the test vectors are extracted from that [implementation](https://github.com/ElementsProject/secp256k1-zkp/tree/master/src/modules/musig).
 
 **Note: Use this package only for testing and learning, but not for live use cases.**
 **Don't risk funds, probably errors exist.**

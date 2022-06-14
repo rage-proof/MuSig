@@ -9,7 +9,7 @@ The schnorr specification is defined in BIP-340 and the code and test vectors ar
 The MuSig code is following the implementation for libsecp256k1 as well as the test vectors are extracted from that [implementation](https://github.com/ElementsProject/secp256k1-zkp/tree/master/src/modules/musig).
 
 **Note: Use this package only for testing and learning, but not for live use cases.**
-**Don't risk funds, probably errors exist.**
+**Don't risk funds, it doesn't save the keys and is not constant time.**
 
 
 ## Installing
